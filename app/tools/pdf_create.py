@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
 
 from app.common.pdf_convert import SUPPORTED_EXTS, convert_to_pdf, is_supported, merge_pdfs, unique_pdf_path
 from app.common.pdf_images import collect_images, extract_pdf_text, save_image
-from app.common.styles import COLOR_BORDER, COLOR_PRIMARY, COLOR_TEXT_PRIMARY, MODERN_QSS
+from app.common.styles import COLOR_BORDER, COLOR_PRIMARY, MODERN_QSS
 from app.common.loading_dialog import note_progress, style_task_progress
 from app.common.user_prefs import load_dir, save_dir
 
@@ -109,13 +109,12 @@ class PdfCreateWidget(QWidget):
         self.file_table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.file_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.file_table.setShowGrid(False)
-        self.file_table.setAlternatingRowColors(True)
+        self.file_table.setAlternatingRowColors(False)
         self.file_table.setIconSize(QSize(20, 20))
         self.file_table.verticalHeader().setVisible(False)
         self.file_table.setSortingEnabled(True)
         self.header.setSortIndicator(1, Qt.SortOrder.AscendingOrder)
         self.file_table.itemChanged.connect(self._on_item_changed)
-        self.file_table.cellClicked.connect(self._on_cell_clicked)
         self.file_table.setColumnWidth(0, 40)
         self.file_table.setColumnWidth(1, 220)
         self.file_table.setColumnWidth(2, 140)
@@ -206,10 +205,7 @@ class PdfCreateWidget(QWidget):
         self.file_table.setStyleSheet(f"""
             QTableWidget {{
                 background: white;
-                alternate-background-color: #FFF8F2;
                 border: 1px solid {COLOR_BORDER};
-                selection-background-color: transparent;
-                selection-color: {COLOR_TEXT_PRIMARY};
                 outline: none;
             }}
             QTableWidget::item {{
@@ -369,16 +365,6 @@ class PdfCreateWidget(QWidget):
             if item and item.checkState() == Qt.CheckState.Checked:
                 count += 1
         return count
-
-    def _on_cell_clicked(self, row, column):
-        if column == 0 or self._updating_checks:
-            return
-        item = self.file_table.item(row, 0)
-        if item is None:
-            return
-        item.setCheckState(
-            Qt.CheckState.Unchecked if item.checkState() == Qt.CheckState.Checked else Qt.CheckState.Checked
-        )
 
     def _on_item_changed(self, item):
         if self._updating_checks or item.column() != 0:

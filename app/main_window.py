@@ -1,7 +1,7 @@
 from functools import partial
 import importlib
  
-from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QSize, Qt, QTimer
+from PyQt6.QtCore import QEasingCurve, QLibraryInfo, QLocale, QPropertyAnimation, QSize, Qt, QTimer, QTranslator
 from PyQt6.QtGui import QFont, QIcon, QPixmap
 from PyQt6.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton, QStyle, QVBoxLayout, QWidget
  
@@ -583,6 +583,10 @@ class MdiMainWindow(QMainWindow):
 def run():
     app = QApplication.instance() or QApplication([])
     app.setFont(QFont('Malgun Gothic', 10))
+    translator = QTranslator(app)
+    if translator.load(QLocale(QLocale.Language.Korean), "qtbase", "_",
+                       QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath)):
+        app.installTranslator(translator)
     window = MdiMainWindow()
     window.show()
     return app.exec()

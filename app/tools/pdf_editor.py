@@ -1,4 +1,5 @@
 import os
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -69,7 +70,7 @@ class PdfEditorWidget(QWidget):
         self.file_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.file_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.file_table.setShowGrid(False)
-        self.file_table.setAlternatingRowColors(True)
+        self.file_table.setAlternatingRowColors(False)
         self.file_table.setIconSize(QSize(20, 20))
         self.file_table.verticalHeader().setVisible(False)
         self.file_table.currentCellChanged.connect(self._on_current_cell_changed)
@@ -124,6 +125,10 @@ class PdfEditorWidget(QWidget):
         self.lbl_zoom.editingFinished.connect(self._apply_thumb_zoom_input)
         self.lbl_sel = QLabel("선택 0 / 전체 0")
         self.lbl_sel.setObjectName("toolbarLabel")
+        btn_all = QPushButton("전체")
+        btn_all.setObjectName("toolbarBtn")
+        btn_all.setFixedSize(46, 30)
+        btn_all.clicked.connect(self._select_all)
         btn_odd = QPushButton("홀수")
         btn_odd.setObjectName("toolbarBtn")
         btn_odd.setFixedSize(46, 30)
@@ -141,6 +146,7 @@ class PdfEditorWidget(QWidget):
         page_head.addWidget(btn_zoom_in)
         page_head.addWidget(self.lbl_zoom)
         page_head.addSpacing(8)
+        page_head.addWidget(btn_all)
         page_head.addWidget(btn_odd)
         page_head.addWidget(btn_even)
         page_head.addWidget(btn_clear)
@@ -249,23 +255,50 @@ class PdfEditorWidget(QWidget):
         self.radio_range = QRadioButton("페이지 범위 (예: 1-5, 6-10)")
         self.radio_every = QRadioButton("N페이지마다")
         self.radio_each = QRadioButton("각 페이지 개별 추출")
-        for radio in (self.radio_keep, self.radio_groups, self.radio_range, self.radio_every, self.radio_each):
-            self.split_group.addButton(radio)
-            lay.addWidget(radio)
         self.radio_keep.setChecked(True)
+
+        lay.addWidget(self.radio_keep)
+        lay.addWidget(self.radio_groups)
+
+        lay.addWidget(self.radio_range)
+        self.range_row = QWidget()
+        range_lay = QHBoxLayout(self.range_row)
+        range_lay.setContentsMargins(24, 0, 0, 0)
         self.edit_range = QLineEdit()
         self.edit_range.setPlaceholderText("1-5, 6-10, 11-")
-        lay.addWidget(self.edit_range)
-        row = QHBoxLayout()
-        row.addWidget(QLabel("N:"))
+        range_lay.addWidget(self.edit_range)
+        lay.addWidget(self.range_row)
+
+        lay.addWidget(self.radio_every)
+        self.every_row = QWidget()
+        every_lay = QHBoxLayout(self.every_row)
+        every_lay.setContentsMargins(24, 0, 0, 0)
+        every_lay.addWidget(QLabel("N:"))
         self.spin_every = QSpinBox()
         self.spin_every.setRange(1, 9999)
         self.spin_every.setValue(10)
-        row.addWidget(self.spin_every)
-        row.addStretch()
-        lay.addLayout(row)
+        every_lay.addWidget(self.spin_every)
+        every_lay.addStretch()
+        lay.addWidget(self.every_row)
+
+        lay.addWidget(self.radio_each)
+        for radio in (self.radio_keep, self.radio_groups, self.radio_range, self.radio_every, self.radio_each):
+            self.split_group.addButton(radio)
+
+        self.radio_range.toggled.connect(self._on_range_toggled)
+        self.radio_every.toggled.connect(self._on_every_toggled)
+        self.range_row.setVisible(False)
+        self.every_row.setVisible(False)
         lay.addStretch()
         return w
+
+    def _on_range_toggled(self, checked):
+        self.range_row.setVisible(checked)
+        if checked:
+            self.edit_range.setFocus()
+
+    def _on_every_toggled(self, checked):
+        self.every_row.setVisible(checked)
 
     def _create_merge_tab(self):
         w = QWidget()
@@ -290,7 +323,6 @@ class PdfEditorWidget(QWidget):
             ("선택 페이지 90° 회전", self._rotate_checked),
             ("선택 페이지 맨 앞으로", lambda: self._move_checked("front")),
             ("선택 페이지 맨 뒤로", lambda: self._move_checked("back")),
-            ("현재 구성으로 저장", lambda: self._stage_page("save")),
             ("편집 취소", self._reset_page_edits),
         ]
         for title, handler in actions:
@@ -318,15 +350,16 @@ class PdfEditorWidget(QWidget):
         self.file_table.setStyleSheet(f"""
             QTableWidget {{
                 background: white;
-                alternate-background-color: #FFF8F2;
                 border: 1px solid {COLOR_BORDER};
-                selection-background-color: #FFE9DC;
-                selection-color: {COLOR_TEXT_PRIMARY};
                 outline: none;
             }}
             QTableWidget::item {{
                 border: none;
                 padding: 2px 4px;
+            }}
+            QTableWidget::item:selected {{
+                background-color: #FFF8F2;
+                color: {COLOR_TEXT_PRIMARY};
             }}
             QHeaderView::section {{
                 background-color: #C2410C;
@@ -419,8 +452,45 @@ class PdfEditorWidget(QWidget):
         return rows
 
     def _on_current_cell_changed(self, row, column, prev_row, prev_col):
-        if row != prev_row:
-            self.on_file_selected(row)
+        if row == prev_row or row < 0 or row >= len(self.docs):
+            return
+        if self.file_paths[row] != getattr(self, "_shown_path", None) and not self._confirm_page_edit_switch():
+            self.file_table.blockSignals(True)
+            self.file_table.selectRow(self.current_index)
+            self.file_table.blockSignals(False)
+            return
+        self.on_file_selected(row)
+
+    def _page_plan_dirty(self):
+        if self.current_index < 0 or self.current_index >= len(self.docs):
+            return False
+        doc = self.docs[self.current_index]
+        if len(self.page_plan) != doc.page_count:
+            return True
+        return any(plan["src"] != i or plan["rot"] % 360 for i, plan in enumerate(self.page_plan))
+
+    def _confirm_page_edit_switch(self):
+        if not self._page_plan_dirty():
+            return True
+        name = Path(self.file_paths[self.current_index]).name
+        box = QMessageBox(self)
+        box.setWindowTitle("페이지 편집")
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setText(f"'{name}'의 페이지 편집 내용이 저장되지 않았습니다.\n저장하고 다른 PDF로 이동하시겠습니까?")
+        btn_save = box.addButton("저장", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("저장하지 않음", QMessageBox.ButtonRole.DestructiveRole)
+        box.setDefaultButton(btn_save)
+        box.exec()
+        if box.clickedButton() == btn_save:
+            return self._save_page_edits()
+        return True
+
+    def _save_page_edits(self):
+        plans = [dict(plan) for plan in self.page_plan]
+        saved = self._save_page_inplace(plans)
+        if saved:
+            QMessageBox.information(self, "완료", f"원본에 저장했습니다.\n{saved}")
+        return bool(saved)
 
     def _on_file_item_changed(self, item):
         if self._updating_checks or item.column() != 0:
@@ -463,6 +533,9 @@ class PdfEditorWidget(QWidget):
             return
         self.file_table.blockSignals(True)
         for row in reversed(rows):
+            if row >= len(self.docs):
+                self.file_table.removeRow(row)
+                continue
             path = self.file_paths[row]
             try:
                 self.docs[row].close()
@@ -655,6 +728,10 @@ class PdfEditorWidget(QWidget):
     def _update_sel_label(self):
         self.lbl_sel.setText(f"선택 {len(self.checked)} / 전체 {len(self.page_plan)}")
 
+    def _select_all(self):
+        self.checked = {plan["src"] for plan in self.page_plan}
+        self._refresh_page_thumbnails()
+
     def _select_parity(self, odd):
         if odd:
             self.checked = {plan["src"] for plan in self.page_plan if plan["src"] % 2 == 0}
@@ -722,21 +799,25 @@ class PdfEditorWidget(QWidget):
 
     def move_file_up(self):
         row = self.file_table.currentRow()
-        if row > 0:
+        if 0 < row < len(self.docs):
             self._swap_files(row, row - 1)
 
     def move_file_down(self):
         row = self.file_table.currentRow()
-        if 0 <= row < self.file_table.rowCount() - 1:
+        if 0 <= row < len(self.docs) - 1:
             self._swap_files(row, row + 1)
 
     def _swap_files(self, a, b):
+        if not (0 <= a < len(self.docs) and 0 <= b < len(self.docs)):
+            return
         self._updating_checks = True
+        self.file_table.blockSignals(True)
         for column in range(self.file_table.columnCount()):
             item_a = self.file_table.takeItem(a, column)
             item_b = self.file_table.takeItem(b, column)
             self.file_table.setItem(a, column, item_b)
             self.file_table.setItem(b, column, item_a)
+        self.file_table.blockSignals(False)
         self._updating_checks = False
         self.docs[a], self.docs[b] = self.docs[b], self.docs[a]
         self.file_paths[a], self.file_paths[b] = self.file_paths[b], self.file_paths[a]
@@ -853,7 +934,7 @@ class PdfEditorWidget(QWidget):
             if rotated:
                 notes.append(f"회전 {rotated}페이지")
             notes.append(f"저장 {len(plans)}페이지")
-            self.status_label.setText("페이지 편집: " + ", ".join(notes))
+            self.status_label.setText("페이지 편집: " + ", ".join(notes) + " → 원본에 저장")
 
     def do_execute(self):
         tab = self.tabs.currentIndex()
@@ -864,8 +945,11 @@ class PdfEditorWidget(QWidget):
             if not self._preview_merge():
                 return
         elif not (self._planned_action and self._planned_action[0] == "page"):
-            self.status_label.setText("페이지 편집에서 작업을 먼저 선택하세요.")
-            return
+            if self._page_plan_dirty():
+                self._stage_page("save")
+            else:
+                self.status_label.setText("페이지 편집에서 작업을 먼저 선택하세요.")
+                return
         if not self._planned_action:
             return
         kind = self._planned_action[0]
@@ -1007,6 +1091,27 @@ class PdfEditorWidget(QWidget):
         if not plans:
             QMessageBox.warning(self, "알림", "저장할 페이지가 없습니다.")
             return None
+        if self._planned_action[1]["mode"] == "save":
+            name = Path(self.file_paths[self.current_index]).name
+            box = QMessageBox(self)
+            box.setWindowTitle("원본 저장")
+            box.setIcon(QMessageBox.Icon.Question)
+            box.setText(f"'{name}' 원본 파일에 편집 내용을 저장합니다.\n계속하시겠습니까?")
+            btn_save = box.addButton("저장", QMessageBox.ButtonRole.AcceptRole)
+            box.addButton("취소", QMessageBox.ButtonRole.RejectRole)
+            box.setDefaultButton(btn_save)
+            box.exec()
+            if box.clickedButton() != btn_save:
+                return None
+            self.progress.setVisible(True)
+            self.progress.setMaximum(1)
+            self.progress.setValue(0)
+            saved = self._save_page_inplace(plans)
+            note_progress(self.progress, 1)
+            if saved:
+                QMessageBox.information(self, "완료", f"저장 완료:\n{saved}")
+                return [saved]
+            return None
         save_path = self._save_target("edited.pdf", self.file_paths[self.current_index])
         if not save_path:
             return None
@@ -1017,6 +1122,36 @@ class PdfEditorWidget(QWidget):
         note_progress(self.progress, len(plans))
         QMessageBox.information(self, "완료", f"저장 완료:\n{save_path}")
         return [save_path]
+
+    def _save_page_inplace(self, plans):
+        path = self.file_paths[self.current_index]
+        doc = self.docs[self.current_index]
+        fd, tmp_name = tempfile.mkstemp(suffix=".pdf", prefix="pdfedit_", dir=Path(path).parent)
+        os.close(fd)
+        tmp_path = Path(tmp_name)
+        try:
+            self._write_plans(doc, plans, str(tmp_path))
+        except Exception as e:
+            tmp_path.unlink(missing_ok=True)
+            QMessageBox.critical(self, "오류", f"저장 중 오류가 발생했습니다.\n{e}")
+            return None
+        try:
+            doc.close()
+            os.replace(tmp_path, path)
+            self.docs[self.current_index] = pymupdf.open(path)
+        except Exception as e:
+            tmp_path.unlink(missing_ok=True)
+            QMessageBox.critical(self, "오류", f"원본 파일을 덮어쓸 수 없습니다.\n{e}")
+            try:
+                self.docs[self.current_index] = pymupdf.open(path)
+            except Exception:
+                pass
+            return None
+        self._thumb_cache = {key: pixmap for key, pixmap in self._thumb_cache.items() if key[0] != path}
+        self.page_plan = [{"src": i, "rot": 0} for i in range(self.docs[self.current_index].page_count)]
+        self.checked = set()
+        self._refresh_page_thumbnails()
+        return path
 
     def closeEvent(self, event):
         for doc in self.docs:

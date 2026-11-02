@@ -329,7 +329,7 @@ class PdfModifyWidget(QWidget):
             shortcut.activated.connect(handler)
         self.update_controls()
 
-    def submit(self, function, callback, message="처리 중…"):
+    def submit(self, function, callback, message="처리 중…", error_title=None):
         if self.job:
             return
         self.preview_timer.stop()
@@ -346,6 +346,8 @@ class PdfModifyWidget(QWidget):
             if self.isVisible():
                 if focus is not None and focus.isVisible() and focus.isEnabled():
                     focus.setFocus()
+                elif self.canvas.inline.isVisible():
+                    self.canvas.inline.setFocus()
                 else:
                     self.canvas.setFocus()
             if job.error:
@@ -354,6 +356,8 @@ class PdfModifyWidget(QWidget):
                     self.canvas.show_page(self._last_render)
                 self.support.setText(job.error)
                 self.status.setText("처리하지 못했습니다: " + job.error)
+                if error_title:
+                    QMessageBox.warning(self, error_title, job.error)
             else:
                 callback(job.value)
             job.deleteLater()
@@ -378,6 +382,7 @@ class PdfModifyWidget(QWidget):
         self.history_button.setEnabled(loaded)
         editable = writable and (self.target is not None or self.add_origin is not None)
         self.properties.setEnabled(bool(editable))
+        self.text_edit.setEnabled(bool(not self.target or self.target.writable))
         self.canvas.read_only = not writable
         self.font_button.setEnabled(not self.keep_format.isChecked() or self.add_origin is not None)
         self.size_spin.setEnabled(not self.keep_format.isChecked())
@@ -628,12 +633,14 @@ class PdfModifyWidget(QWidget):
         self.canvas.update()
 
     def inline_changed(self, text):
-        self.text_edit.setText(text)
+        if self.text_edit.text() != text:
+            self.text_edit.setText(text)
 
     def draft_changed(self, *args):
         if self._changing or not (self.target or self.add_origin):
             return
-        self.canvas.inline.setText(self.text_edit.text())
+        if self.canvas.inline.text() != self.text_edit.text():
+            self.canvas.inline.setText(self.text_edit.text())
         self._draft_dirty = True
         self.prepared = None
         self.update_controls()
@@ -707,7 +714,7 @@ class PdfModifyWidget(QWidget):
         prepared = self.prepared
         def apply():
             self.session.commit(prepared or self.session.prepare(page, target, text, **options))
-        self.submit(apply, lambda _: self.applied(), "변경 적용 중…")
+        self.submit(apply, lambda _: self.applied(), "변경 적용 중…", error_title="수정 적용")
 
     def applied(self):
         self.clear_draft()

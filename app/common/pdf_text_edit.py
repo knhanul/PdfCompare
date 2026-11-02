@@ -53,8 +53,36 @@ class TextRun:
                        origins=self.origins[start:end])
 
 
+def _has_shared_or_nested_xobjects(page):
+    xobjs = page.get_xobjects()
+    if not xobjs:
+        return False
+    if any(x[2] != 0 for x in xobjs):
+        return True
+    xrefs = {x[0] for x in xobjs}
+    if len(xrefs) != len(xobjs):
+        return True
+    doc = page.parent
+    if doc is not None:
+        for other in doc:
+            if other.number != page.number and any(x[0] in xrefs for x in other.get_xobjects()):
+                return True
+    return False
+
+
+def _page_restriction(page):
+    if _has_shared_or_nested_xobjects(page):
+        return "다른 페이지와 공유되거나 중첩된 묶음 콘텐츠가 있어 이 페이지는 열람만 지원합니다."
+    if any(a.type[0] == fitz.PDF_ANNOT_REDACT for a in page.annots() or ()):
+        return "기존 가림 주석이 있는 페이지는 수정할 수 없습니다."
+    return ""
+
+
 def analyze(page, revision=0):
     runs = []
+    page_reason = _page_restriction(page)
+    type3_names = {_name(entry[3]) for entry in page.get_fonts(full=True)
+                   if entry[2] == "Type3" and entry[3]}
     raw = page.get_text("rawdict", flags=fitz.TEXTFLAGS_RAWDICT & ~fitz.TEXT_PRESERVE_IMAGES)
     for bi, block in enumerate(raw["blocks"]):
         for li, line in enumerate(block.get("lines", [])):
@@ -63,15 +91,24 @@ def analyze(page, revision=0):
                 if not chars:
                     continue
                 direction = tuple(line["dir"])
+                font_name = span["font"]
+                is_type3 = font_name.startswith("Type3") or _name(font_name) in type3_names
                 safe = (line.get("wmode", 0) == 0 and
                         abs(direction[0] - 1) < 1e-5 and abs(direction[1]) < 1e-5 and
                         span.get("alpha", 255) == 255 and
                         all(c["c"] != "\ufffd" and len(c["c"]) == 1 for c in chars))
+                if not safe:
+                    reason = "세로쓰기·기울어진 텍스트·투명 문자·불명확한 문자 인코딩은 지원하지 않습니다."
+                elif page_reason:
+                    reason = page_reason
+                elif is_type3:
+                    reason = "글자가 도형(윤곽선) 또는 Type3 글꼴로 되어 있어 텍스트를 직접 수정할 수 없습니다."
+                else:
+                    reason = ""
                 runs.append(TextRun(page.number, (bi, li, si, 0),
                     tuple(c["c"] for c in chars), tuple(tuple(c["bbox"]) for c in chars),
-                    tuple(tuple(c["origin"]) for c in chars), span["font"], span["size"],
-                    span["color"], span["flags"], direction, safe,
-                    "" if safe else "세로쓰기·기울어진 텍스트·투명 문자·불명확한 문자 인코딩은 지원하지 않습니다.",
+                    tuple(tuple(c["origin"]) for c in chars), font_name, span["size"],
+                    span["color"], span["flags"], direction, not reason, reason,
                     revision))
     return runs
 
@@ -181,11 +218,9 @@ def rasterize(source, number, zoom, revision, password="", thumbnail=False, incl
 
 
 def _page_guard(page, region):
-    if page.get_xobjects():
-        raise EditError("다른 페이지와 공유될 수 있는 묶음 콘텐츠가 있어 이 페이지는 열람만 지원합니다.")
-    # apply_redactions applies ALL existing redactions; never apply user annotations.
-    if any(a.type[0] == fitz.PDF_ANNOT_REDACT for a in page.annots() or ()):
-        raise EditError("기존 가림 주석이 있는 페이지는 수정할 수 없습니다.")
+    reason = _page_restriction(page)
+    if reason:
+        raise EditError(reason)
     for rect in ([fitz.Rect(link["from"]) for link in page.get_links()] +
                  [a.rect for a in page.annots() or ()] +
                  [w.rect for w in page.widgets() or ()]):
