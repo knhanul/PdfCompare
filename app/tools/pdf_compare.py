@@ -722,10 +722,24 @@ class PDFViewer(QScrollArea):
                 painter.setPen(QPen(accent, 2))
                 painter.setBrush(fill)
                 painter.drawRoundedRect(rect, 4, 4)
-                # 번호 배지: 좌상단 모서리에 겹쳐 표시
+                # 번호 배지: 박스 바깥에 두어 본문과 겹치지 않게 한다.
                 badge_w = 18 if len(number) == 1 else 24
                 badge_h = 16
-                badge = QRect(rect.x() - 1, max(0, rect.y() - badge_h + 2), badge_w, badge_h)
+                gap = 3
+                img_w = painter.device().width() if painter.device() else rect.right() + badge_w
+                img_h = painter.device().height() if painter.device() else rect.bottom() + badge_h
+                # 1순위: 박스 위쪽 바깥
+                bx, by = rect.x(), rect.y() - badge_h - gap
+                if by < 0:
+                    # 2순위: 박스 왼쪽 바깥
+                    bx, by = rect.x() - badge_w - gap, rect.y()
+                if bx < 0:
+                    # 3순위: 박스 오른쪽 바깥
+                    bx, by = rect.right() + gap, rect.y()
+                if bx + badge_w > img_w:
+                    # 마지막: 박스 안 좌상단 (공간 없을 때만)
+                    bx, by = rect.x() + 2, rect.y() + 2
+                badge = QRect(int(bx), int(max(0, by)), badge_w, badge_h)
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(badge_bg)
                 painter.drawRoundedRect(badge, 4, 4)
