@@ -63,7 +63,7 @@ STATUS_LABELS_KO = {
 
 
 class PdfFormWidget(QWidget):
-    """사이드바 「PDF 양식」 통합 도구 — 양식 만들기 | 양식 작성하기 | 데이터 추출·입력."""
+    """사이드바 「PDF 입력폼 관리」 통합 도구 — 양식 만들기 | 양식 작성하기 | 데이터 추출·입력."""
 
     def __init__(self, parent=None, comparison_settings=None):
         super().__init__(parent)
@@ -128,7 +128,7 @@ class PdfFormWidget(QWidget):
 
         title_row = QHBoxLayout()
         lbl_title = QLabel(
-            "<span style='font-size:15px; font-weight:700; color:#2C2A29;'>PDF 양식</span>  "
+            "<span style='font-size:15px; font-weight:700; color:#2C2A29;'>PDF 입력폼 관리</span>  "
             "<span style='font-size:12px; color:#6E6863;'>"
             "일반 PDF에 입력란을 만들거나, 만들어진 양식을 작성하고 데이터를 관리할 수 있습니다.</span>"
         )
@@ -184,7 +184,7 @@ class PdfFormWidget(QWidget):
         outer.setSpacing(18)
         outer.addStretch(1)
 
-        headline = QLabel("PDF 양식으로 문서 작업을 더 간편하게")
+        headline = QLabel("PDF 입력폼 관리로 문서 작업을 더 간편하게")
         headline.setAlignment(Qt.AlignmentFlag.AlignCenter)
         headline.setStyleSheet("font-size: 22px; font-weight: 700; color: #2C2A29; border: none;")
         outer.addWidget(headline)
@@ -201,7 +201,7 @@ class PdfFormWidget(QWidget):
         cards_row.setSpacing(14)
         steps = [
             ("① 양식 만들기", "일반 PDF 문서 위에서 마우스로 영역을 드래그해 한 줄 입력란, 날짜, 체크박스, 라디오 버튼, 드롭다운 목록을 추가합니다."),
-            ("② 양식 작성하기", "준비된 PDF 양식의 입력란을 클릭하거나 오른쪽 입력 패널에서 편리하게 내용을 채우고 저장합니다."),
+            ("② 양식 작성하기", "준비된 PDF 입력폼의 입력란을 클릭하거나 오른쪽 입력 패널에서 편리하게 내용을 채우고 저장합니다."),
             ("③ 데이터 추출·입력", "입력된 내용을 엑셀(CSV)·JSON으로 내보내거나, 외부 데이터를 불러와 자동으로 채웁니다."),
         ]
         for step_title, step_desc in steps:
@@ -316,7 +316,7 @@ class PdfFormWidget(QWidget):
 
         top_row = QHBoxLayout()
         lbl_guide = QLabel(
-            "<b>PDF 양식의 입력값을 엑셀(CSV)·JSON으로 추출하거나, 외부 데이터 파일을 가져와 자동으로 입력합니다.</b>"
+            "<b>PDF 입력폼의 입력값을 엑셀(CSV)·JSON으로 추출하거나, 외부 데이터 파일을 가져와 자동으로 입력합니다.</b>"
         )
         btn_help = QPushButton("이 기능은 무엇인가요?")
         btn_help.setObjectName("secondaryBtn")
@@ -328,7 +328,7 @@ class PdfFormWidget(QWidget):
         splitter = QSplitter(Qt.Orientation.Vertical)
 
         # 상단: 데이터 추출 섹션
-        extract_group = QGroupBox("1. 데이터 추출 (현재 PDF 양식 값 확인 및 내보내기)")
+        extract_group = QGroupBox("1. 데이터 추출 (현재 PDF 입력폼 값 확인 및 내보내기)")
         ex_lay = QVBoxLayout(extract_group)
         ex_lay.setSpacing(6)
 
@@ -677,7 +677,7 @@ class PdfFormWidget(QWidget):
         default_path = self.session.source_path.with_name(self.session.source_path.stem + suffix)
         save_path, _ = QFileDialog.getSaveFileName(
             self,
-            "입력 내용 고정 PDF 저장" if bake else "PDF 양식 저장",
+            "입력 내용 고정 PDF 저장" if bake else "PDF 입력폼 저장",
             str(default_path),
             "PDF 파일 (*.pdf)",
         )
@@ -868,7 +868,7 @@ class PdfFormWidget(QWidget):
             applied_count, skipped = apply_import_analysis(self.session, self._current_analysis)
             self._sync_all_views(self.selected_xref)
             self._rebuild_import_preview()
-            msg_lines = [f"정상 매칭된 {applied_count}개 항목을 PDF 양식에 반영했습니다."]
+            msg_lines = [f"정상 매칭된 {applied_count}개 항목을 PDF 입력폼에 반영했습니다."]
             if skipped:
                 msg_lines.append(f"\n제외/실패 항목 ({len(skipped)}개):")
                 for s in skipped[:8]:
@@ -887,12 +887,12 @@ class PdfFormWidget(QWidget):
                 "<b>사용 순서</b><br>"
                 "1. 오른쪽에서 추가할 입력란 종류(한 줄 입력란, 체크박스, 드롭다운 등)를 선택합니다.<br>"
                 "2. 왼쪽 PDF 화면에서 마우스로 원하는 위치를 드래그하면 입력란이 만들어집니다.<br>"
-                "3. 오른쪽 속성 창에서 표시 이름, 필수 여부, 선택 항목을 수정하고 <b>[입력 가능한 PDF 양식 저장]</b>을 누릅니다.",
+                "3. 오른쪽 속성 창에서 표시 이름, 필수 여부, 선택 항목을 수정하고 <b>[입력 가능한 PDF 입력폼 저장]</b>을 누릅니다.",
             ),
             1: (
                 "양식 작성하기 안내",
                 "<b>② 양식 작성하기란?</b><br>"
-                "이미 입력란이 만들어진 PDF 양식에 내용을 채워 넣는 기능입니다.<br><br>"
+                "이미 입력란이 만들어진 PDF 입력폼에 내용을 채워 넣는 기능입니다.<br><br>"
                 "<b>사용 팁</b><br>"
                 "• 왼쪽 PDF의 파란색 입력란을 클릭하면 오른쪽 입력 칸으로 바로 이동합니다.<br>"
                 "• 반대로 오른쪽 입력 칸을 클릭하면 PDF에서 해당 위치를 찾아 강조해 줍니다.<br>"
@@ -902,7 +902,7 @@ class PdfFormWidget(QWidget):
             2: (
                 "데이터 추출·입력 안내",
                 "<b>③ 데이터 추출·입력이란?</b><br>"
-                "PDF 양식에 적힌 내용을 엑셀(CSV)이나 JSON 파일로 뽑아내거나, 반대로 파일에 정리된 값을 PDF에 자동으로 채워 넣는 기능입니다.<br><br>"
+                "PDF 입력폼에 적힌 내용을 엑셀(CSV)이나 JSON 파일로 뽑아내거나, 반대로 파일에 정리된 값을 PDF에 자동으로 채워 넣는 기능입니다.<br><br>"
                 "<b>사용 팁</b><br>"
                 "• 처음 사용할 때는 <b>[입력용 CSV 템플릿 저장]</b>을 눌러 빈 엑셀 양식을 만든 뒤, 값을 채워 다시 가져오면 필드명이 자동으로 연결됩니다.",
             ),

@@ -291,7 +291,7 @@ class FormCreatorPanel(QWidget):
         outer.addWidget(scroll, 1)
 
         # 하단 저장 버튼
-        self.btn_save_form = QPushButton("입력 가능한 PDF 양식 저장")
+        self.btn_save_form = QPushButton("입력 가능한 PDF 입력폼 저장")
         self.btn_save_form.setObjectName("actionBtn")
         self.btn_save_form.setMinimumHeight(38)
         self.btn_save_form.clicked.connect(self.save_form_requested.emit)

@@ -418,16 +418,6 @@ class MdiMainWindow(QMainWindow):
                 'icon': '✏️',
             },
             {
-                'key': 'pdf_form',
-                'menu_title': 'PDF 양식',
-                'window_title': 'PDF 양식',
-                'module_path': 'app.tools.pdf_form',
-                'class_name': 'PdfFormWidget',
-                'singleton': True,
-                'enabled': True,
-                'icon': '📋',
-            },
-            {
                 'key': 'pdf_create',
                 'menu_title': 'PDF 생성',
                 'window_title': 'PDF 생성',
@@ -446,6 +436,16 @@ class MdiMainWindow(QMainWindow):
                 'singleton': True,
                 'enabled': True,
                 'icon': '🏷️',
+            },
+            {
+                'key': 'pdf_form',
+                'menu_title': 'PDF 입력폼 관리',
+                'window_title': 'PDF 입력폼 관리',
+                'module_path': 'app.tools.pdf_form',
+                'class_name': 'PdfFormWidget',
+                'singleton': True,
+                'enabled': True,
+                'icon': '📋',
             },
         ]
         self.tool_definitions = tool_definitions
