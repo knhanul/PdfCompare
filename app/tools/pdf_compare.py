@@ -705,13 +705,9 @@ class PDFViewer(QScrollArea):
                    if not (effective := self.effective_area(page, area)).is_empty]
             for page, areas in self.selection_areas.items()
         }
-        if self.parent_tool:
-            self.parent_tool.invalidate_comparison_results()
-        else:
-            self.word_highlights.clear()
-            self.diff_pages = []
-            self.diff_index = -1
-            self.refresh_highlights()
+        # 새 영역 지정 시에는 기존 비교 하이라이트를 유지한다.
+        # 하이라이트 클리어는 비교 실행(start_async_comparison) 또는 명시적 초기화 시에만 수행.
+        self.refresh_highlights()
 
     def rebuild_selection_data(self):
         self.char_data = []
