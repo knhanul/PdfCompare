@@ -704,7 +704,7 @@ class PDFViewer(QScrollArea):
     def _draw_completed_regions(self, painter, page_index):
         """비교가 끝난 영역을 번호 박스로 그린다. 양쪽 PDF에 같은 번호가 짝이다."""
         accent = QColor(164, 71, 53)          # POSID accent
-        fill = QColor(164, 71, 53, 28)        # 아주 옅은 채움
+        fill = QColor(164, 71, 53, 8)         # 거의 투명한 채움
         badge_bg = QColor(164, 71, 53)
         badge_text = QColor(255, 255, 255)
         for region in self.completed_regions:
@@ -718,8 +718,10 @@ class PDFViewer(QScrollArea):
                 )
                 if rect.width() < 2 or rect.height() < 2:
                     continue
-                # 테두리 + 옅은 채움
-                painter.setPen(QPen(accent, 2))
+                # 점선 테두리 + 거의 투명한 채움
+                pen = QPen(accent, 2)
+                pen.setStyle(Qt.PenStyle.DashLine)
+                painter.setPen(pen)
                 painter.setBrush(fill)
                 painter.drawRoundedRect(rect, 4, 4)
                 # 번호 배지: 페이지 왼쪽 여백에 두어 이어지는 본문과 겹치지 않게 한다.
@@ -1389,8 +1391,8 @@ class PdfCompareWidget(ComparisonSettingsMixin, QWidget):
             self.compare_manager.cleanup()
         
         # 데이터 준비
+        # 이전 비교 하이라이트는 유지한다. 새 결과는 기존 위에 누적된다.
         for viewer in [self.viewer1, self.viewer2]:
-            viewer.word_highlights.clear()
             viewer.last_compared_area = {
                 page: [effective for area in areas
                        if not (effective := viewer.effective_area(page, area)).is_empty]
@@ -1501,10 +1503,10 @@ class PdfCompareWidget(ComparisonSettingsMixin, QWidget):
             self.viewer2.diff_index = -1
 
             self._record_completed_pair()
+            pair_number = self.viewer1.completed_regions[-1]["number"] if self.viewer1.completed_regions else None
 
-            # diff_list 채우기
+            # diff_list 채우기 (이전 비교 결과는 유지)
             opcodes = result.get('opcodes', [])
-            self.diff_list = []
 
             # diff_pages 처리 (리스트 또는 튜플일 수 있음)
             diff_pages1 = result.get('diff_pages1', [])
@@ -1556,6 +1558,7 @@ class PdfCompareWidget(ComparisonSettingsMixin, QWidget):
                                 pos_info = f"(위에서 {char_y:.0f}px 지점)"
                     self.diff_list.append({
                         'type': 'delete' if tag == 'delete' else 'replace',
+                        'pair': pair_number,
                         'pdf': 'PDF 1',
                         'page': page_num,
                         'position': pos_info,
@@ -1589,6 +1592,7 @@ class PdfCompareWidget(ComparisonSettingsMixin, QWidget):
                                 pos_info = f"(위에서 {char_y:.0f}px 지점)"
                     self.diff_list.append({
                         'type': 'insert' if tag == 'insert' else 'replace',
+                        'pair': pair_number,
                         'pdf': 'PDF 2',
                         'page': page_num,
                         'position': pos_info,
@@ -1886,7 +1890,9 @@ class PdfCompareWidget(ComparisonSettingsMixin, QWidget):
             type_text = {'delete': '삭제', 'insert': '추가', 'replace': '변경'}.get(diff['type'], '•')
             pos = diff.get('position', '')
 
-            item_text = f"{type_icon} [{diff['pdf']}] 페이지 {diff['page']} {pos} - {type_text}: {self.display_difference_text(diff['text'])}"
+            pair = diff.get('pair')
+            pair_label = f"#{pair} " if pair else ""
+            item_text = f"{type_icon} {pair_label}[{diff['pdf']}] 페이지 {diff['page']} {pos} - {type_text}: {self.display_difference_text(diff['text'])}"
             item = QListWidgetItem(item_text)
             item.setData(1, diff)
             list_widget.addItem(item)
