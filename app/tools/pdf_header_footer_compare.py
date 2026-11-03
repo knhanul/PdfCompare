@@ -321,6 +321,7 @@ class HFViewer(QScrollArea):
         self.vbox.addWidget(self.drop_label)
 
         self.open_pdf_btn = QPushButton('📁 PDF 파일 선택')
+        self.open_pdf_btn.setToolTip('이 쪽에 불러올 PDF 1개 선택\n여러 파일은 하단 「여러 PDF 선택」 사용')
         self.open_pdf_btn.setObjectName('pdfOpenButton')
         self.open_pdf_btn.setFixedHeight(48)
         self.open_pdf_btn.setMinimumWidth(180)
@@ -844,6 +845,14 @@ class HFCompareWidget(ComparisonSettingsMixin, QWidget):
         bl.addWidget(self.sync_scroll_cb)
 
         # 결과 목록 버튼 - 동시 스크롤 오른쪽
+        self.btn_open_multi = QPushButton('📁 여러 PDF 선택')
+        self.btn_open_multi.setObjectName('compareUtilityBtn')
+        self.btn_open_multi.setFixedHeight(40)
+        self.btn_open_multi.setMinimumWidth(130)
+        self.btn_open_multi.setToolTip('한 번에 1~2개 PDF를 선택해 왼쪽/오른쪽에 불러옵니다')
+        self.btn_open_multi.clicked.connect(self.open_multiple_pdfs)
+        bl.addWidget(self.btn_open_multi)
+
         self.btn_diff_list = QPushButton('📋 비교결과')
         self.btn_diff_list.setObjectName('compareUtilityBtn')
         self.btn_diff_list.setFixedHeight(40)
@@ -1654,4 +1663,22 @@ class HFCompareWidget(ComparisonSettingsMixin, QWidget):
         dlg.setTextFormat(Qt.TextFormat.RichText)
         dlg.setText(msg)
         dlg.exec()
+
+    def open_multiple_pdfs(self):
+        """한 번에 1~2개 PDF를 선택해 양쪽 뷰어에 불러온다."""
+        paths = open_pdf_dialog(self, '비교할 PDF 선택 (1~2개)', multi=True)
+        if not paths:
+            return
+        if len(paths) > 2:
+            QMessageBox.information(self, '안내', '최대 2개까지 선택할 수 있습니다. 처음 2개만 사용합니다.')
+            paths = paths[:2]
+        viewers = [self.viewer1, self.viewer2]
+        for i, path in enumerate(paths):
+            doc, err = try_open_pdf(path)
+            if doc is None:
+                show_open_error(self, path, err)
+                continue
+            doc.close()
+            if viewers[i].load_pdf(path):
+                viewers[i].update_loaded_pdf_label(path)
 
