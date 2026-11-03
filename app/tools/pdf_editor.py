@@ -20,6 +20,7 @@ from app.common.styles import (
 from app.common.loading_dialog import note_progress, style_task_progress
 from app.common.user_prefs import load_dir, save_dir
 from app.common.pdf_text_block import extract_text_blocks, preview_text_edit
+from app.common.pdf_file_open import open_pdf_dialog
 from app.tools.pdf_create import CheckBoxHeader
 
 EDITOR_OUTPUT_KEY = "output/pdf_editor"
@@ -344,7 +345,7 @@ class PdfEditorWidget(QWidget):
             self._load_files(paths)
 
     def add_files(self):
-        paths, _ = QFileDialog.getOpenFileNames(self, "PDF 선택", "", "PDF Files (*.pdf)")
+        paths = open_pdf_dialog(self, "PDF 선택", multi=True)
         if paths:
             self._load_files(paths)
 

@@ -18,6 +18,7 @@ from app.common.styles import (
 from app.common.pdf_search_helper import PDFSearchHelper
 from app.common.pdf_compare_worker import CompareThreadManager
 from app.common.pdf_structure_compare import compare_structure
+from app.common.pdf_file_open import open_pdf_dialog, try_open_pdf, show_open_error
 from app.common.pdf_text_normalizer import collect_raw_chars, normalize_raw_chars
 from app.common.comparison_options import ComparisonOptions
 from app.common.comparison_settings import ComparisonSettingsMixin
@@ -398,7 +399,8 @@ class HFViewer(QScrollArea):
             self.parent_tool.lbl_name2.setText(f"<b style='color:{COLOR_HEADER_ACCENT}; font-size:15px; font-weight:600;'>[PDF 2] 📄 {os.path.basename(pdf_path)}</b>")
 
     def open_pdf_via_dialog(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, 'PDF 파일 선택', '', 'PDF Files (*.pdf)')
+        paths = open_pdf_dialog(self, 'PDF 파일 선택', multi=False)
+        file_path = paths[0] if paths else ""
         if not file_path:
             return
         self.clear_all_data()

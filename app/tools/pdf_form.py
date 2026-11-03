@@ -45,6 +45,7 @@ from app.common.pdf_form.form_data_io import (
     load_external_data_file,
 )
 from app.common.pdf_form.form_filler import FormFillerPanel
+from app.common.pdf_file_open import open_pdf_dialog, try_open_pdf, show_open_error
 from app.common.pdf_form.form_service import (
     FormDocumentSession,
     ensure_sample_form_pdf,
@@ -486,7 +487,8 @@ class PdfFormWidget(QWidget):
     def open_pdf_dialog(self):
         if not self.confirm_discard_changes():
             return
-        path, _ = QFileDialog.getOpenFileName(self, "PDF 파일 열기", "", "PDF 파일 (*.pdf)")
+        paths = open_pdf_dialog(self, "PDF 파일 열기", multi=False)
+        path = paths[0] if paths else ""
         if path:
             self.load_pdf(path)
 

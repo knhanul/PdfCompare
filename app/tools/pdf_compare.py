@@ -18,6 +18,7 @@ from app.common.pdf_text_normalizer import collect_raw_chars, normalize_raw_char
 from app.common.comparison_options import ComparisonOptions
 from app.common.comparison_settings import ComparisonSettingsMixin
 from app.common.tool_toggle import ToolSwitchToggle
+from app.common.pdf_file_open import open_pdf_dialog, try_open_pdf, show_open_error
 
 
 class ViewComparisonTextDialog(QDialog):
@@ -362,7 +363,7 @@ class PDFViewer(QScrollArea):
         self.auto_scroll_timer.timeout.connect(self.auto_scroll_selection)
         
         # Add drop zone indicator when empty
-        self.drop_label = QLabel('📄 PDF 파일을 여기에 드래그 앤 드랍하세요\n또는 아래 버튼을 클릭하여 파일을 선택하세요')
+        self.drop_label = QLabel('📄 PDF 파일을 여기로 드래그하세요\n또는 아래 버튼으로 선택하세요\n\n양쪽 PDF를 열면 영역을 지정해 비교할 수 있습니다')
         self.drop_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.drop_label.setStyleSheet('''
             QLabel {
@@ -531,14 +532,20 @@ class PDFViewer(QScrollArea):
             self.parent_tool.lbl_name2.setText(f"<b style='color:{COLOR_HEADER_ACCENT}; font-size:15px; font-weight:600;'>[PDF 2] 📄 {os.path.basename(pdf_path)}</b>")
 
     def open_pdf_via_dialog(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, 'PDF 파일 선택', '', 'PDF Files (*.pdf)')
-        if not file_path:
+        paths = open_pdf_dialog(self, 'PDF 파일 선택', multi=False)
+        if not paths:
             return
+        file_path = paths[0]
         self.clear_all_data()
+        doc, err = try_open_pdf(file_path)
+        if doc is None:
+            show_open_error(self, file_path, err)
+            return
+        # load_pdf expects path; we already validated
         if self.load_pdf(file_path):
             self.update_loaded_pdf_label(file_path)
         else:
-            QMessageBox.warning(self, '오류', 'PDF 파일을 불러오지 못했습니다.')
+            show_open_error(self, file_path, "불러오기에 실패했습니다.")
     
     def set_parent_tool(self, parent_tool):
         """Set reference to parent tool for callback"""
