@@ -1,11 +1,11 @@
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QButtonGroup, QFrame, QHBoxLayout, QPushButton
+from PyQt6.QtWidgets import QButtonGroup, QFrame, QHBoxLayout, QLabel, QPushButton
 
 
 class ToolSwitchToggle(QFrame):
-    """두 도구를 전환하는 세그먼트 토글.
+    """두 화면을 전환하는 세그먼트 토글.
 
-    활성 세그먼트는 흰색 pill로 강조되고, 다른 세그먼트를 클릭하면
+    활성 화면은 채워진 pill로 표시되고, 다른 세그먼트를 누르면
     index_changed(index) 시그널이 발생한다.
     """
 
@@ -13,46 +13,63 @@ class ToolSwitchToggle(QFrame):
 
     def __init__(self, labels, parent=None):
         super().__init__(parent)
-        self.setObjectName('toolToggle')
+        self.setObjectName("toolToggle")
+        self.setToolTip("비교 화면 전환")
         layout = QHBoxLayout(self)
         layout.setContentsMargins(3, 3, 3, 3)
         layout.setSpacing(2)
+
+        caption = QLabel("화면")
+        caption.setObjectName("toolToggleCaption")
+        layout.addWidget(caption)
 
         self._group = QButtonGroup(self)
         self._group.setExclusive(True)
         self.buttons = []
         for index, label in enumerate(labels):
             button = QPushButton(label)
+            button.setObjectName("toolToggleBtn")
             button.setCheckable(True)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setToolTip(f"{label} 화면으로 전환")
             button.clicked.connect(lambda checked, i=index: self.index_changed.emit(i))
             layout.addWidget(button)
             self._group.addButton(button, index)
             self.buttons.append(button)
 
-        self.setStyleSheet('''
+        self.setStyleSheet("""
             QFrame#toolToggle {
-                background-color: #E5E5EA;
-                border-radius: 10px;
+                background-color: #E7E2DE;
+                border: 1px solid #D5CEC8;
+                border-radius: 12px;
             }
-            QFrame#toolToggle QPushButton {
+            QLabel#toolToggleCaption {
+                color: #8E4235;
+                font-size: 11px;
+                font-weight: 700;
+                padding: 0 4px 0 6px;
+                background: transparent;
+            }
+            QFrame#toolToggle QPushButton#toolToggleBtn {
                 background-color: transparent;
                 border: none;
-                border-radius: 7px;
-                color: #777777;
+                border-radius: 8px;
+                color: #6B6562;
                 font-size: 12px;
                 font-weight: 500;
-                padding: 6px 14px;
+                padding: 4px 12px;
+                min-height: 22px;
             }
-            QFrame#toolToggle QPushButton:hover {
+            QFrame#toolToggle QPushButton#toolToggleBtn:hover {
+                background-color: rgba(164, 71, 53, 0.08);
                 color: #343434;
             }
-            QFrame#toolToggle QPushButton:checked {
-                background-color: #FFFFFF;
-                color: #343434;
-                font-weight: 600;
+            QFrame#toolToggle QPushButton#toolToggleBtn:checked {
+                background-color: #A44735;
+                color: #FFFFFF;
+                font-weight: 700;
             }
-        ''')
+        """)
 
     def set_active(self, index):
         """활성 세그먼트 표시 (시그널 발생 없음)."""
