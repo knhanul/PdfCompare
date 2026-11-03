@@ -137,6 +137,10 @@ class SelectableLabel(QLabel):
         if not self._image_rect().contains(event.pos()):
             return
         self.setFocus()
+        badge_hit = viewer.badge_at(self.page_num, event.pos(), self._image_rect())
+        if badge_hit:
+            viewer.jump_to_partner_badge(badge_hit["number"])
+            return
         self.exclusion_edge = self.edge_at(event.pos())
         if self.exclusion_edge:
             self.setCursor(Qt.CursorShape.SizeVerCursor)
@@ -157,8 +161,11 @@ class SelectableLabel(QLabel):
         elif self.is_selecting:
             viewer.move_selection(self.mapTo(viewer.container, event.pos()), event.globalPosition().toPoint())
         else:
-            self.setCursor(Qt.CursorShape.SizeVerCursor if self.edge_at(event.pos())
-                           else Qt.CursorShape.CrossCursor)
+            if viewer.badge_at(self.page_num, event.pos(), self._image_rect()):
+                self.setCursor(Qt.CursorShape.PointingHandCursor)
+            else:
+                self.setCursor(Qt.CursorShape.SizeVerCursor if self.edge_at(event.pos())
+                               else Qt.CursorShape.CrossCursor)
 
     def mouseReleaseEvent(self, event):
         viewer = self.viewer()
@@ -354,6 +361,7 @@ class PDFViewer(QScrollArea):
         self.word_highlights = {}
         self.last_compared_area = {}
         self.completed_regions = []  # [{number, areas: {page: [(x0,y0,x1,y1)]}}]
+        self.badge_hits = {}  # page -> [{number, rect}]
         self.pending_selection_rect = None
         self.selection_areas = {}
         self.drag_start = None
@@ -679,6 +687,7 @@ class PDFViewer(QScrollArea):
         self.verticalScrollBar().setValue(scroll_to)
 
     def refresh_highlights(self):
+        self.badge_hits = {}
         for i, lbl in enumerate(self.page_labels):
             if i >= len(self.page_base_pixmaps):
                 continue
@@ -733,6 +742,10 @@ class PDFViewer(QScrollArea):
                 if by + badge_h > img_h:
                     by = max(0, img_h - badge_h - 2)
                 badge = QRect(int(bx), int(max(0, by)), badge_w, badge_h)
+                self.badge_hits.setdefault(page_index, []).append({
+                    "number": region.get("number"),
+                    "rect": QRect(badge),
+                })
                 # 배지에서 영역 박스까지 얇은 연결선
                 painter.setPen(QPen(accent, 1))
                 painter.drawLine(badge.right(), badge.center().y(), rect.left(), rect.top() + 2)
@@ -742,6 +755,36 @@ class PDFViewer(QScrollArea):
                 painter.setPen(badge_text)
                 painter.setFont(QFont("Malgun Gothic", 8, QFont.Weight.Bold))
                 painter.drawText(badge, Qt.AlignmentFlag.AlignCenter, number)
+
+
+    def badge_at(self, page_num, pos, image_rect):
+        """클릭 위치가 비교 번호 배지인지 확인한다."""
+        if image_rect is None or image_rect.isNull():
+            return None
+        local = QPoint(pos.x() - image_rect.x(), pos.y() - image_rect.y())
+        for hit in self.badge_hits.get(page_num, []):
+            if hit["rect"].contains(local):
+                return hit
+        return None
+
+    def jump_to_partner_badge(self, number):
+        """같은 번호의 상대 뷰어 비교 박스로 스크롤한다."""
+        tool = self.parent_tool
+        if not tool:
+            return
+        other = tool.viewer2 if self is tool.viewer1 else tool.viewer1
+        region = next((r for r in other.completed_regions if r.get("number") == number), None)
+        if not region or not region.get("areas"):
+            return
+        page = min(region["areas"])
+        boxes = region["areas"][page]
+        if not boxes or page >= len(other.page_labels):
+            return
+        y0 = boxes[0][1]
+        label = other.page_labels[page]
+        target = label.y() + int(y0 * other.scale) - 48
+        other.verticalScrollBar().setValue(max(0, target))
+        other.page_spin.setText(str(page + 1))
 
     def on_selection_complete(self, page_num, rect):
         self.page_labels[page_num].clear_selection()
