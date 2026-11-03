@@ -153,7 +153,13 @@ class PdfCreateWidget(QWidget):
         convert_page = QWidget()
         convert_layout = QVBoxLayout(convert_page)
         convert_layout.setContentsMargins(0, 8, 0, 0)
-        convert_hint = QLabel("PDF가 아닌 파일을 PDF로 만듭니다. 병합을 체크하면 PDF를 포함해 한 파일로 합칩니다.")
+        convert_hint = QLabel(
+            "변환 가능: 한글(hwp, hwpx), 워드(doc, docx, rtf), 엑셀(xls, xlsx), "
+            "파워포인트(ppt, pptx), 오픈오피스(odt, ods, odp), 마크다운(md), "
+            "텍스트(txt, csv, log), 이미지(png, jpg, jpeg, bmp, gif, tif, tiff, webp).\n"
+            "hwp·doc·xls·ppt·rtf·odt 계열은 한컴오피스 또는 LibreOffice가 필요합니다. "
+            "병합을 체크하면 기존 PDF도 함께 한 파일로 합칩니다."
+        )
         convert_hint.setWordWrap(True)
         convert_layout.addWidget(convert_hint)
         convert_row = QHBoxLayout()
@@ -468,7 +474,7 @@ class PdfCreateWidget(QWidget):
         if index == 1:
             self.status_label.setText("추출 대상: 체크한 PDF. 이미지는 원본 형식, 글자는 txt로 저장합니다.")
         else:
-            self.status_label.setText("지원 형식: pdf, hwp, hwpx, doc, docx, xls, xlsx, ppt, pptx, md, txt, 이미지")
+            self.status_label.setText("변환: hwp/hwpx, doc/docx/rtf, xls/xlsx, ppt/pptx, odt/ods/odp, md, txt/csv/log, png/jpg/jpeg/bmp/gif/tif/tiff/webp")
 
     def _target_dir(self, src):
         if self.output_dir and os.path.isdir(self.output_dir):
