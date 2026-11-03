@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (
     QAbstractItemView, QCheckBox, QFileDialog, QFileIconProvider, QFrame,
     QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem,
     QMessageBox, QProgressBar, QPushButton, QSplitter, QTableWidget,
-    QTableWidgetItem, QVBoxLayout, QWidget,
+    QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from app.common.pdf_convert import SUPPORTED_EXTS, is_supported
@@ -147,9 +147,55 @@ class PdfCreateWidget(QWidget):
         right = QWidget()
         right_layout = QVBoxLayout(right)
         right_layout.setContentsMargins(0, 0, 0, 0)
-        hint = QLabel("불러온 파일은 모두 체크됩니다. PDF도 목록에 올라갑니다.\n병합을 체크하면 한 파일로 합치고, 이미지 추출과 글자 추출은 체크한 PDF에서 저장합니다.")
-        hint.setWordWrap(True)
-        right_layout.addWidget(hint)
+
+        self.action_tabs = QTabWidget()
+        self.action_tabs.currentChanged.connect(self._on_action_tab)
+
+        convert_page = QWidget()
+        convert_layout = QVBoxLayout(convert_page)
+        convert_layout.setContentsMargins(0, 8, 0, 0)
+        convert_hint = QLabel("PDF가 아닌 파일을 PDF로 만듭니다. 병합을 체크하면 PDF를 포함해 한 파일로 합칩니다.")
+        convert_hint.setWordWrap(True)
+        convert_layout.addWidget(convert_hint)
+        convert_row = QHBoxLayout()
+        self.btn_convert = QPushButton("변환 실행")
+        self.btn_convert.setObjectName("actionBtn")
+        self.btn_convert.clicked.connect(self.convert_checked)
+        self.merge_check = QCheckBox("한 개 파일로 병합")
+        self.merge_check.setToolTip("체크하면 체크한 파일을 목록 순서대로 하나의 PDF로 합칩니다. PDF는 그대로 포함됩니다.")
+        self.btn_cancel = QPushButton("변환 취소")
+        self.btn_cancel.setToolTip("진행 중인 변환을 중지합니다. 현재 변환 중인 파일은 끝까지 처리된 뒤 멈춥니다.")
+        self.btn_cancel.clicked.connect(self.cancel_conversion)
+        self.btn_cancel.hide()
+        convert_row.addWidget(self.btn_convert)
+        convert_row.addWidget(self.merge_check)
+        convert_row.addWidget(self.btn_cancel)
+        convert_row.addStretch()
+        convert_layout.addLayout(convert_row)
+        convert_layout.addStretch()
+        self.action_tabs.addTab(convert_page, "PDF로 만들기")
+
+        extract_page = QWidget()
+        extract_layout = QVBoxLayout(extract_page)
+        extract_layout.setContentsMargins(0, 8, 0, 0)
+        extract_hint = QLabel("체크한 PDF에서만 동작합니다. 이미지와 글자를 결과 폴더에 저장합니다.")
+        extract_hint.setWordWrap(True)
+        extract_layout.addWidget(extract_hint)
+        extract_row = QHBoxLayout()
+        self.btn_extract = QPushButton("이미지 추출")
+        self.btn_extract.setToolTip("체크한 PDF에서 이미지를 저장합니다.")
+        self.btn_extract.clicked.connect(self.extract_images)
+        self.btn_text = QPushButton("글자 추출")
+        self.btn_text.setToolTip("체크한 PDF의 글자를 텍스트 파일로 저장합니다.")
+        self.btn_text.clicked.connect(self.extract_text)
+        extract_row.addWidget(self.btn_extract)
+        extract_row.addWidget(self.btn_text)
+        extract_row.addStretch()
+        extract_layout.addLayout(extract_row)
+        extract_layout.addStretch()
+        self.action_tabs.addTab(extract_page, "추출")
+        self.action_tabs.setMaximumHeight(150)
+        right_layout.addWidget(self.action_tabs)
 
         folder_row = QHBoxLayout()
         self.output_edit = QLineEdit()
@@ -168,35 +214,13 @@ class PdfCreateWidget(QWidget):
             self.output_dir = saved_dir
             self.output_edit.setText(saved_dir)
 
-        action_row = QHBoxLayout()
-        self.btn_convert = QPushButton("변환 실행")
-        self.btn_convert.setObjectName("actionBtn")
-        self.btn_convert.clicked.connect(self.convert_checked)
-        self.merge_check = QCheckBox("한 개 파일로 병합")
-        self.merge_check.setToolTip("체크하면 체크한 파일을 목록 순서대로 하나의 PDF로 합칩니다. PDF는 그대로 포함됩니다.")
-        self.btn_extract = QPushButton("이미지 추출")
-        self.btn_extract.setToolTip("체크한 PDF에서 이미지를 저장합니다.")
-        self.btn_extract.clicked.connect(self.extract_images)
-        self.btn_text = QPushButton("글자 추출")
-        self.btn_text.setToolTip("체크한 PDF의 글자를 텍스트 파일로 저장합니다.")
-        self.btn_text.clicked.connect(self.extract_text)
-        self.btn_cancel = QPushButton("변환 취소")
-        self.btn_cancel.setToolTip("진행 중인 변환을 중지합니다. 현재 변환 중인 파일은 끝까지 처리된 뒤 멈춥니다.")
-        self.btn_cancel.clicked.connect(self.cancel_conversion)
-        self.btn_cancel.hide()
-        action_row.addWidget(self.btn_convert)
-        action_row.addWidget(self.merge_check)
-        action_row.addWidget(self.btn_extract)
-        action_row.addWidget(self.btn_text)
-        action_row.addWidget(self.btn_cancel)
-        right_layout.addLayout(action_row)
-
         self.progress = QProgressBar()
         self.progress.setVisible(False)
         style_task_progress(self.progress)
         right_layout.addWidget(self.progress)
 
-        self.status_label = QLabel("지원 형식: pdf, hwp, hwpx, doc, docx, xls, xlsx, ppt, pptx, md, txt, 이미지")
+        self.status_label = QLabel("")
+        self._on_action_tab(0)
         self.status_label.setWordWrap(True)
         right_layout.addWidget(self.status_label)
         right_layout.addWidget(QLabel("작업 이력"))
@@ -439,6 +463,12 @@ class PdfCreateWidget(QWidget):
         self.output_dir = ""
         self.output_edit.clear()
         save_dir(CREATE_OUTPUT_KEY, "")
+
+    def _on_action_tab(self, index):
+        if index == 1:
+            self.status_label.setText("추출 대상: 체크한 PDF. 이미지는 원본 형식, 글자는 txt로 저장합니다.")
+        else:
+            self.status_label.setText("지원 형식: pdf, hwp, hwpx, doc, docx, xls, xlsx, ppt, pptx, md, txt, 이미지")
 
     def _target_dir(self, src):
         if self.output_dir and os.path.isdir(self.output_dir):
