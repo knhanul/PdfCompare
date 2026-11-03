@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -166,6 +167,14 @@ class FormCreatorPanel(QWidget):
         self.edit_name = QLineEdit()
         self.edit_name.setPlaceholderText("예: applicant_name")
         self.chk_allow_dup = QCheckBox("같은 필드명 공유 허용 (라디오 그룹 / 동일 값 반복 표시)")
+        self.btn_link_alias = QPushButton("선택한 입력란을 동일 값으로 연결")
+        self.btn_link_alias.setObjectName("secondaryBtn")
+        self.btn_link_alias.setToolTip("현재 선택한 입력란을 다른 필드와 동일한 값을 공유하도록 연결합니다.")
+        self.btn_link_alias.clicked.connect(self._link_selected_as_alias)
+        self.btn_normalize_radio = QPushButton("라디오 그룹 상태 정리")
+        self.btn_normalize_radio.setObjectName("secondaryBtn")
+        self.btn_normalize_radio.setToolTip("같은 그룹의 라디오 버튼이 하나만 선택되도록 On/Off 상태를 정리합니다.")
+        self.btn_normalize_radio.clicked.connect(self._normalize_selected_radio)
 
         self.lbl_type_info = QLabel("-")
         self.lbl_page_info = QLabel("-")
@@ -252,6 +261,8 @@ class FormCreatorPanel(QWidget):
         props_form.addRow("표시 이름:", self.edit_label)
         props_form.addRow("내부 필드명:", self.edit_name)
         props_form.addRow("", self.chk_allow_dup)
+        props_form.addRow(self.btn_link_alias)
+        props_form.addRow(self.btn_normalize_radio)
         props_form.addRow("입력란 유형:", self.lbl_type_info)
         props_form.addRow("페이지 번호:", self.lbl_page_info)
         props_form.addRow("입력 조건:", self.chk_required)
@@ -507,3 +518,35 @@ class FormCreatorPanel(QWidget):
     def _on_redo(self):
         if self.session and self.session.redo():
             self.document_mutated.emit(0)
+
+    def _link_selected_as_alias(self):
+        if not self.session or not self.current_xref:
+            QMessageBox.information(self, "안내", "먼저 연결할 입력란을 선택하세요.")
+            return
+        target, ok = QInputDialog.getText(
+            self, "동일 값 공유", "연결할 대상 필드명을 입력하세요\n(같은 유형의 기존 필드명):"
+        )
+        if not ok or not target.strip():
+            return
+        try:
+            updated = self.session.link_as_alias(self.current_xref, target.strip())
+            self.document_mutated.emit(updated.xref)
+            QMessageBox.information(self, "완료", f"'{target.strip()}'와 동일한 값을 공유하도록 연결했습니다.")
+        except FormError as exc:
+            QMessageBox.warning(self, "연결 실패", str(exc))
+
+    def _normalize_selected_radio(self):
+        if not self.session or not self.current_xref:
+            QMessageBox.information(self, "안내", "라디오 그룹에 속한 입력란을 선택하세요.")
+            return
+        w = self.session.get_widget_by_xref(self.current_xref)
+        if not w or w.field_type != "radio":
+            QMessageBox.information(self, "안내", "라디오 버튼 입력란을 선택하세요.")
+            return
+        try:
+            count = self.session.normalize_radio_group(w.field_name)
+            self.document_mutated.emit(self.current_xref)
+            QMessageBox.information(self, "완료", f"라디오 그룹 '{w.field_name}'의 {count}개 항목 상태를 정리했습니다.")
+        except FormError as exc:
+            QMessageBox.warning(self, "정리 실패", str(exc))
+

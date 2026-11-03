@@ -430,6 +430,87 @@ class FormDocumentSession:
             self.doc.xref_set_key(xref, "AS", "/Off")
             self.doc.xref_set_key(xref, "V", "/Off")
 
+
+    def link_as_alias(self, source_xref: int, target_field_name: str) -> WidgetInstance:
+        """선택한 위젯을 기존 논리 필드와 동일한 값을 공유하도록 연결한다 (Widget Alias).
+
+        필드명을 동일하게 맞추고, 유형이 호환되는 경우에만 허용한다.
+        """
+        self.ensure_modifiable()
+        source = self.get_widget_by_xref(source_xref)
+        if source is None:
+            raise FormError("연결할 입력란을 찾을 수 없습니다.")
+        target_name = (target_field_name or "").strip()
+        if not target_name:
+            raise FormError("연결할 대상 필드명을 지정하세요.")
+        existing = {lf.field_name: lf for lf in self.list_logical_fields()}
+        if target_name not in existing:
+            raise FormError(f"대상 필드 '{target_name}'을(를) 찾을 수 없습니다.")
+        target_lf = existing[target_name]
+        if source.field_type != target_lf.field_type:
+            raise FormError(
+                f"유형이 다릅니다. 원본은 {source.type_label}, 대상은 {target_lf.type_label}입니다."
+            )
+        if source.field_type == "radio":
+            raise FormError("라디오 버튼은 '라디오 그룹'으로 연결하세요. Alias 연결은 텍스트·체크박스 등에 사용합니다.")
+        # 필드명만 변경하면 동일 논리 필드로 취급된다
+        updated = self.update_widget_properties(
+            source_xref,
+            field_name=target_name,
+            allow_duplicate_name=True,
+        )
+        self._commit_current_doc(f"동일 값 공유 연결: {target_name}")
+        return updated
+
+    def normalize_radio_group(self, field_name: str) -> int:
+        """비표준 라디오 그룹의 On/Off 상태를 정리한다.
+
+        같은 field_name을 가진 라디오 위젯들 중 하나만 선택 상태가 되도록 맞추고,
+        나머지는 Off로 설정한다. 원본을 직접 덮어쓰지 않고 현재 세션 문서에만 적용한다.
+        Returns: 정리한 위젯 수
+        """
+        self.ensure_modifiable()
+        widgets = [w for w in self.list_widgets() if w.field_name == field_name and w.field_type == "radio"]
+        if len(widgets) < 2:
+            raise FormError("라디오 그룹으로 정리할 항목이 2개 이상 필요합니다.")
+        # 현재 선택된 항목 찾기
+        selected = None
+        for w in widgets:
+            if w.value and str(w.value) not in ("", "Off", "False"):
+                selected = w
+                break
+        if selected is None:
+            selected = widgets[0]  # 없으면 첫 번째를 기본 선택
+        count = 0
+        for w in widgets:
+            is_sel = (w.xref == selected.xref)
+            self._set_radio_widget_option_state(w.xref, w.on_state or "Yes", is_sel)
+            count += 1
+        self._commit_current_doc(f"라디오 그룹 상태 정리: {field_name}")
+        return count
+
+    def add_radio_option(
+        self,
+        group_field_name: str,
+        page_index: int,
+        rect: tuple[float, float, float, float],
+        option_value: str,
+        field_label: str = "",
+    ) -> WidgetInstance:
+        """기존 라디오 그룹에 새로운 선택 항목을 추가한다."""
+        existing = {lf.field_name: lf for lf in self.list_logical_fields()}
+        if group_field_name not in existing or existing[group_field_name].field_type != "radio":
+            raise FormError(f"'{group_field_name}'은(는) 라디오 그룹이 아닙니다.")
+        return self.add_field(
+            page_index=page_index,
+            rect=rect,
+            field_type="radio",
+            field_name=group_field_name,
+            field_label=field_label or option_value,
+            radio_option=option_value,
+            allow_duplicate_name=True,
+        )
+
     def add_field(
         self,
         page_index: int,
