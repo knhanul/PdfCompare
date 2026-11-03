@@ -12,6 +12,23 @@ TARGET_MODULES = {
 }
 
 
+def _detect_target_from_version_file():
+    """번들된 build_version.txt의 BUILD_TARGET에서 타겟 추출"""
+    try:
+        if hasattr(sys, 'frozen') and hasattr(sys, '_MEIPASS'):
+            version_file = Path(sys._MEIPASS) / 'app' / 'common' / 'build_version.txt'
+        else:
+            version_file = BASE_DIR / 'app' / 'common' / 'build_version.txt'
+        if version_file.exists():
+            for line in version_file.read_text(encoding='utf-8').splitlines():
+                line = line.strip()
+                if line.startswith('BUILD_TARGET='):
+                    return line.split('=', 1)[1].strip().lower()
+    except Exception:
+        pass
+    return None
+
+
 def _detect_target_from_executable():
     """실행 파일 이름에서 타겟 추출"""
     try:
@@ -30,8 +47,11 @@ def _detect_target_from_executable():
 
 
 def _load_target():
-    # 환경변수 우선, 없으면 실행 파일 이름에서 추출, 없으면 기본값
+    # 환경변수 우선, 없으면 빌드 버전 파일의 BUILD_TARGET,
+    # 없으면 실행 파일 이름에서 추출, 없으면 기본값
     build_target = os.environ.get('BUILD_TARGET')
+    if not build_target:
+        build_target = _detect_target_from_version_file()
     if not build_target:
         build_target = _detect_target_from_executable()
     if not build_target:

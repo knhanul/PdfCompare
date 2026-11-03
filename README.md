@@ -78,8 +78,9 @@ PdfDiff/
 `configs/settings.py`가 실행 환경에 따라 타겟을 자동으로 로딩합니다.
 
 1. 환경변수 `BUILD_TARGET` (빌드 시 `build.py`가 설정)
-2. 실행 파일 이름에서 추출 (예: `nunidesk_posid.exe` → `posid`)
-3. 기본값: `posid`
+2. 번들된 `build_version.txt`의 `BUILD_TARGET`
+3. 실행 파일 이름에서 추출 (예: `nunidesk_post.exe` → `post`, 구버전 호환)
+4. 기본값: `posid`
 
 | 타겟 | 앱 이름 | 회사명 | 테마색 |
 | --- | --- | --- | --- |
@@ -133,18 +134,18 @@ python build.py --target posid --version 2.0.1 --release-date 2026-08-20
 | `--release-date` | X | 오늘 날짜 | 출시일자 (YYYY-MM-DD) |
 
 ### 빌드 과정
-1. `app/common/build_version.txt`에 버전/출시일 기록
+1. `app/common/build_version.txt`에 버전/출시일/빌드 타겟 기록
 2. 환경변수 `BUILD_TARGET`, `APP_VERSION`, `PDF_COMPARE_RELEASE_DATE` 설정
-3. PyInstaller로 `main.py`를 엔트리포인트로 `nunidesk_<target>.exe` 생성
+3. PyInstaller로 `main.py`를 엔트리포인트로 `PDFDiff.exe` 생성 (모든 타겟 동일 파일명)
    - `--windowed` (콘솔 창 없음)
    - 타겟 아이콘 적용 (`assets/<target>/<target>_icon.ico`)
    - `assets/`, `assets/<target>/`, `app/common/build_version.txt` 번들링
    - `configs.*`, `app.tools.*` 모듈을 hidden-import로 명시
 
 ### 결과물
-- `dist/nunidesk_<target>/nunidesk_<target>.exe` — 실행 파일
+- `dist/PDFDiff/PDFDiff.exe` — 실행 파일
 - `build/` — 중간 산출물
-- `nunidesk_<target>.spec` — PyInstaller 스펙 파일 (자동 생성)
+- `PDFDiff.spec` — PyInstaller 스펙 파일 (자동 생성)
 
 ### 빌드 시 주의사항
 - 빌드 로그에 `Processing standard module hook 'hook-PyQt6.py' ...` 라인이 나타나야 PyQt6가 정상 번들링된 것입니다. 해당 라인이 없다면 venv에 PyQt6가 설치되지 않은 것입니다.

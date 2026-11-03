@@ -7,17 +7,17 @@ from pathlib import Path
 
 TARGETS = {
     'posid': {
-        'app_name': 'nunidesk_posid',
+        'app_name': 'PDFDiff',
         'asset_dir': 'assets/posid',
         'icon': 'assets/posid/posid_icon.ico',
     },
     'post': {
-        'app_name': 'nunidesk_post',
+        'app_name': 'PDFDiff',
         'asset_dir': 'assets/post',
         'icon': 'assets/post/post_icon.ico',
     },
     'nuni': {
-        'app_name': 'nunidesk_nuni',
+        'app_name': 'PDFDiff',
         'asset_dir': 'assets/nuni',
         'icon': 'assets/nuni/nuni_icon.ico',
     },
@@ -32,7 +32,11 @@ def build(target_name: str, version: str = None, release_date: str = None, onefi
     
     # 버전과 생성일자를 파일로 저장 (런타임에서 읽기 위해)
     version_file = project_root / 'app' / 'common' / 'build_version.txt'
-    version_content = f"APP_VERSION={version or '1.2.0'}\nPDF_COMPARE_RELEASE_DATE={release_date or datetime.now().strftime('%Y-%m-%d')}\n"
+    version_content = (
+        f"APP_VERSION={version or '1.2.0'}\n"
+        f"PDF_COMPARE_RELEASE_DATE={release_date or datetime.now().strftime('%Y-%m-%d')}\n"
+        f"BUILD_TARGET={target_name}\n"
+    )
     version_file.write_text(version_content, encoding='utf-8')
     
     # 환경변수도 설정 (개발 환경용)
