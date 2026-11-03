@@ -353,6 +353,7 @@ class PDFViewer(QScrollArea):
         self.raw_text = ''
         self.word_highlights = {}
         self.last_compared_area = {}
+        self.completed_regions = []  # [{number, areas: {page: [(x0,y0,x1,y1)]}}]
         self.pending_selection_rect = None
         self.selection_areas = {}
         self.drag_start = None
@@ -683,6 +684,8 @@ class PDFViewer(QScrollArea):
                 continue
             img = self.page_base_pixmaps[i].toImage().copy()
             painter = QPainter(img)
+            if self.drag_start is None:
+                self._draw_completed_regions(painter, i)
             if self.drag_start is None and i in self.last_compared_area:
                 for bbox in self.last_compared_area[i]:
                     rect = QRect(int(bbox[0] * self.scale), int(bbox[1] * self.scale), int((bbox[2] - bbox[0]) * self.scale), int((bbox[3] - bbox[1]) * self.scale))
@@ -696,6 +699,29 @@ class PDFViewer(QScrollArea):
             self.search_helper.render_search_highlights(painter, i, self.scale)
             painter.end()
             lbl.setPixmap(QPixmap.fromImage(img))
+
+
+    def _draw_completed_regions(self, painter, page_index):
+        """비교가 끝난 영역을 번호 박스로 그린다. 양쪽 PDF에 같은 번호가 짝이다."""
+        for region in self.completed_regions:
+            boxes = region.get("areas", {}).get(page_index) or []
+            number = str(region.get("number", ""))
+            for bbox in boxes:
+                x0, y0, x1, y1 = bbox[:4]
+                rect = QRect(
+                    int(x0 * self.scale), int(y0 * self.scale),
+                    int((x1 - x0) * self.scale), int((y1 - y0) * self.scale),
+                )
+                if rect.width() < 2 or rect.height() < 2:
+                    continue
+                painter.setPen(QPen(QColor(0, 102, 204), 2))
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawRect(rect)
+                badge = QRect(rect.x(), max(0, rect.y() - 16), 20, 16)
+                painter.fillRect(badge, QColor(0, 102, 204))
+                painter.setPen(QColor(255, 255, 255))
+                painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
+                painter.drawText(badge, Qt.AlignmentFlag.AlignCenter, number)
 
     def on_selection_complete(self, page_num, rect):
         self.page_labels[page_num].clear_selection()
@@ -925,6 +951,7 @@ class PDFViewer(QScrollArea):
         self.cancel_selection(refresh=False)
         self.word_highlights.clear()
         self.last_compared_area.clear()
+        self.completed_regions.clear()
         self.selection_areas.clear()
         self.pending_selection_rect = None
         self.char_data = []
@@ -1196,6 +1223,7 @@ class PdfCompareWidget(ComparisonSettingsMixin, QWidget):
         self.diff_list.clear()
         for viewer in (self.viewer1, self.viewer2):
             viewer.word_highlights.clear()
+            viewer.completed_regions.clear()
             viewer.diff_pages = []
             viewer.diff_index = -1
             viewer.refresh_highlights()
@@ -1240,6 +1268,7 @@ class PdfCompareWidget(ComparisonSettingsMixin, QWidget):
             viewer = viewers[step_index]
             viewer.word_highlights.clear()
             viewer.last_compared_area.clear()
+            viewer.completed_regions.clear()
             viewer.selection_areas.clear()
             viewer.pending_selection_rect = None
             viewer.char_data = []
@@ -1262,6 +1291,7 @@ class PdfCompareWidget(ComparisonSettingsMixin, QWidget):
         if step_index == 0:
             self._reset_current_page1 = self.get_current_page(self.viewer1)
             self._reset_current_page2 = self.get_current_page(self.viewer2)
+            self._clear_completed_on_page(self._reset_current_page1, self._reset_current_page2)
 
         def clear_viewer_current_page(viewer, current_page):
             if current_page is None:
@@ -1384,6 +1414,47 @@ class PdfCompareWidget(ComparisonSettingsMixin, QWidget):
             percent = update_overlay_progress(self.loading_progress, current, total)
             self.loading_message.setText(f"PDF 비교 중... ({percent}%)")
     
+
+    def _record_completed_pair(self):
+        """비교가 끝난 양쪽 영역을 같은 번호로 기록한다."""
+        def snapshot(viewer):
+            out = {}
+            for page, areas in viewer.last_compared_area.items():
+                boxes = []
+                for area in areas:
+                    if hasattr(area, "x0"):
+                        boxes.append((float(area.x0), float(area.y0), float(area.x1), float(area.y1)))
+                    else:
+                        boxes.append(tuple(float(v) for v in area[:4]))
+                if boxes:
+                    out[page] = boxes
+            return out
+
+        areas1 = snapshot(self.viewer1)
+        areas2 = snapshot(self.viewer2)
+        if not areas1 and not areas2:
+            return
+        existing = [r.get("number", 0) for r in self.viewer1.completed_regions]
+        number = (max(existing) + 1) if existing else 1
+        self.viewer1.completed_regions.append({"number": number, "areas": areas1})
+        self.viewer2.completed_regions.append({"number": number, "areas": areas2})
+
+    def _clear_completed_on_page(self, page1, page2):
+        """해당 페이지를 포함한 비교 완료 번호 쌍을 양쪽에서 제거한다."""
+        drop = set()
+        for viewer, page in ((self.viewer1, page1), (self.viewer2, page2)):
+            if page is None:
+                continue
+            for region in viewer.completed_regions:
+                if page in region.get("areas", {}):
+                    drop.add(region.get("number"))
+        if not drop:
+            return
+        for viewer in (self.viewer1, self.viewer2):
+            viewer.completed_regions = [
+                r for r in viewer.completed_regions if r.get("number") not in drop
+            ]
+
     def _on_compare_result_ready(self, result: dict):
         """Worker 결과를 받아 UI 업데이트 (메인 스레드)"""
         if getattr(self, '_active_comparison_revision', self.comparison_settings.revision) != self.comparison_settings.revision:
@@ -1410,6 +1481,8 @@ class PdfCompareWidget(ComparisonSettingsMixin, QWidget):
             self.viewer2.diff_pages = result.get('diff_pages2', [])
             self.viewer1.diff_index = -1
             self.viewer2.diff_index = -1
+
+            self._record_completed_pair()
 
             # diff_list 채우기
             opcodes = result.get('opcodes', [])
