@@ -561,11 +561,8 @@ class HFViewer(QScrollArea):
                 continue
             img = self.page_base_pixmaps[i].toImage().copy()
             painter = QPainter(img)
-            if i in self.last_compared_area:
-                for bbox in self.last_compared_area[i]:
-                    rect = QRect(int(bbox[0] * self.scale), int(bbox[1] * self.scale),
-                                 int((bbox[2] - bbox[0]) * self.scale), int((bbox[3] - bbox[1]) * self.scale))
-                    painter.fillRect(rect, COLOR_AREA)
+            # 전체비교는 사용자가 영역을 지정하지 않으므로 COLOR_AREA(살색) 표시를 하지 않는다.
+            # 차이점 하이라이트(word_highlights)만 그린다.
             if i in self.word_highlights:
                 for bbox, color in self.word_highlights[i]:
                     rect = QRect(int(bbox[0] * self.scale), int(bbox[1] * self.scale),
