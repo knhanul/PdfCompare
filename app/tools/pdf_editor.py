@@ -8,7 +8,7 @@ from PyQt6.QtCore import Qt, QSize, QUrl, QFileInfo
 from PyQt6.QtGui import QPixmap, QImage, QDragEnterEvent, QDropEvent, QIcon, QTransform, QDesktopServices
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFileDialog,
-    QListWidget, QListWidgetItem, QMessageBox, QFrame, QSplitter,
+    QListWidget, QListWidgetItem, QMessageBox, QFrame, QSplitter, QDialog,
     QTabWidget, QLineEdit, QSpinBox, QRadioButton, QProgressBar,
     QAbstractItemView, QButtonGroup, QTableWidget, QTableWidgetItem,
     QFileIconProvider,
@@ -19,6 +19,7 @@ from app.common.styles import (
 )
 from app.common.loading_dialog import note_progress, style_task_progress
 from app.common.user_prefs import load_dir, save_dir
+from app.common.pdf_text_block import extract_text_blocks, preview_text_edit
 from app.tools.pdf_create import CheckBoxHeader
 
 EDITOR_OUTPUT_KEY = "output/pdf_editor"
@@ -318,6 +319,7 @@ class PdfEditorWidget(QWidget):
         lay = QVBoxLayout(w)
         lay.addWidget(QLabel("페이지를 클릭해 선택한 뒤 아래 작업을 사용하세요.\n썸네일이 바로 바뀌고, 실행을 눌러야 파일로 저장됩니다."))
         actions = [
+            ("텍스트 블록 보기", self._show_text_blocks),
             ("선택 페이지 추출", lambda: self._stage_page("extract")),
             ("선택 페이지 삭제", self._delete_checked),
             ("선택 페이지 90° 회전", self._rotate_checked),
@@ -1161,3 +1163,80 @@ class PdfEditorWidget(QWidget):
                 pass
         self.docs.clear()
         super().closeEvent(event)
+
+    def _show_text_blocks(self):
+        """현재 선택된 페이지의 텍스트 블록을 보여주고 편집 미리보기를 제공한다."""
+        if self.current_index < 0 or not self.docs:
+            QMessageBox.information(self, "안내", "먼저 PDF 파일을 선택하세요.")
+            return
+        # 현재 보이는 페이지 중 첫 번째 또는 선택된 페이지
+        page_idx = 0
+        if self.checked:
+            page_idx = min(self.checked)
+        elif self.page_plan:
+            page_idx = 0
+        doc = self.docs[self.current_index]
+        blocks = extract_text_blocks(doc, page_idx)
+        if not blocks:
+            QMessageBox.information(self, "텍스트 블록", "이 페이지에서 텍스트 블록을 찾지 못했습니다.")
+            return
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"텍스트 블록 (페이지 {page_idx + 1})")
+        dlg.resize(640, 480)
+        lay = QVBoxLayout(dlg)
+
+        info = QLabel("블록을 선택하면 원본 텍스트와 속성을 확인할 수 있습니다.\n수정 후 '미리보기'를 누르면 길이 변화와 영역 초과 가능성을 보여줍니다.")
+        lay.addWidget(info)
+
+        list_w = QListWidget()
+        for i, b in enumerate(blocks):
+            preview = (b["text"][:40] + "...") if len(b["text"]) > 40 else b["text"]
+            fs = f" {b['font_size']:.1f}pt" if b.get("font_size") else ""
+            list_w.addItem(f"{i+1}. {preview}{fs}")
+        lay.addWidget(list_w, 1)
+
+        edit = QLineEdit()
+        edit.setPlaceholderText("선택한 블록의 텍스트를 수정해 보세요")
+        lay.addWidget(edit)
+
+        result_lbl = QLabel("")
+        result_lbl.setWordWrap(True)
+        lay.addWidget(result_lbl)
+
+        def on_select():
+            row = list_w.currentRow()
+            if row < 0:
+                return
+            edit.setText(blocks[row]["text"])
+            result_lbl.setText("")
+
+        def on_preview():
+            row = list_w.currentRow()
+            if row < 0:
+                return
+            prev = preview_text_edit(blocks[row], edit.text())
+            msg = f"원본 길이: {len(prev['original'])} → 수정 후: {len(prev['new'])} (차이 {prev['length_change']:+d})"
+            if prev.get("font_size"):
+                msg += f"\n글자 크기: {prev['font_size']:.1f}pt"
+            if prev.get("font_name"):
+                msg += f" · 글꼴: {prev['font_name']}"
+            if prev["warning"]:
+                msg += f"\n⚠️ {prev['warning']}"
+            else:
+                msg += "\n영역 초과 가능성 낮음"
+            result_lbl.setText(msg)
+
+        list_w.currentRowChanged.connect(lambda _: on_select())
+        btn_preview = QPushButton("편집 미리보기")
+        btn_preview.clicked.connect(on_preview)
+        lay.addWidget(btn_preview)
+
+        close_btn = QPushButton("닫기")
+        close_btn.clicked.connect(dlg.accept)
+        lay.addWidget(close_btn)
+
+        if blocks:
+            list_w.setCurrentRow(0)
+        dlg.exec()
+
