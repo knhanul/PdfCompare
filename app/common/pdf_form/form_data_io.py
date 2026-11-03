@@ -355,3 +355,66 @@ def apply_import_analysis(
             )
         )
     return applied_count, skipped
+
+
+def collect_fields_from_multiple_pdfs(
+    pdf_paths: list[str | Path],
+    include_restricted: bool = False,
+) -> tuple[list[dict[str, object]], list[str]]:
+    """동일한 양식의 여러 PDF에서 필드 값을 추출해 테이블 행 목록으로 반환한다.
+
+    Returns:
+        (rows, warnings)
+        rows: [{"filename": ..., "field_name": ..., "value": ..., ...}, ...]
+    """
+    rows: list[dict[str, object]] = []
+    warnings: list[str] = []
+    field_sets: list[set[str]] = []
+
+    for path in pdf_paths:
+        path = Path(path)
+        try:
+            session = FormDocumentSession(path)
+            try:
+                fields = session.list_logical_fields()
+                names = {lf.field_name for lf in fields}
+                field_sets.append(names)
+                for lf in fields:
+                    if not include_restricted and (lf.no_export or lf.is_password or lf.field_type == "signature"):
+                        continue
+                    rows.append(
+                        {
+                            "filename": path.name,
+                            "field_name": lf.field_name,
+                            "field_label": lf.display_name,
+                            "field_type": lf.field_type,
+                            "value": serialize_field_value_for_export(lf),
+                            "pages": ", ".join(str(p) for p in lf.pages),
+                            "required": "Y" if lf.required else "N",
+                            "shared_locations": len(lf.widgets),
+                        }
+                    )
+            finally:
+                session.close()
+        except Exception as exc:
+            warnings.append(f"{path.name}: {exc}")
+
+    if len(field_sets) > 1:
+        base = field_sets[0]
+        for i, s in enumerate(field_sets[1:], start=2):
+            if s != base:
+                warnings.append(f"파일 {i}의 필드 구조가 첫 번째 파일과 다릅니다.")
+
+    return rows, warnings
+
+
+def export_collected_rows_to_csv(rows: list[dict], dest_path: str | Path) -> Path:
+    dest = Path(dest_path)
+    if not rows:
+        raise FormError("내보낼 데이터가 없습니다.")
+    fieldnames = list(rows[0].keys())
+    with dest.open("w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+    return dest

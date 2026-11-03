@@ -332,7 +332,9 @@ class FormDocumentSession:
         fields: list[LogicalField] = []
         for fname, widgets in grouped.items():
             first = widgets[0]
-            label = next((w.field_label for w in widgets if w.field_label), "")
+            # 계층형 필드명(점 구분)이면 마지막 부분을 기본 라벨로 사용
+            leaf = fname.split(".")[-1] if "." in fname else fname
+            label = next((w.field_label for w in widgets if w.field_label), "") or leaf
             required = any(w.required for w in widgets)
             read_only = all(w.read_only for w in widgets)
             no_export = any(w.no_export for w in widgets)

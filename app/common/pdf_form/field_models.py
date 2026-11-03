@@ -150,6 +150,28 @@ class LogicalField:
         return sorted({w.page_index + 1 for w in self.widgets})
 
     @property
+    def hierarchy_path(self) -> list[str]:
+        """점(.) 구분 필드명을 계층 경로로 해석한다. (예: applicant.name -> ['applicant', 'name'])"""
+        parts = [part.strip() for part in (self.field_name or "").split(".") if part.strip()]
+        return parts if len(parts) > 1 else []
+
+    @property
+    def parent_group(self) -> str:
+        """계층이 있으면 상위 그룹명, 없으면 빈 문자열."""
+        path = self.hierarchy_path
+        return path[0] if path else ""
+
+    @property
+    def leaf_name(self) -> str:
+        path = self.hierarchy_path
+        return path[-1] if path else self.field_name
+
+    @property
+    def is_shared_value(self) -> bool:
+        """동일 논리 필드가 여러 위치에 있는 경우 (라디오 제외)."""
+        return len(self.widgets) > 1 and self.field_type != "radio"
+
+    @property
     def primary_page(self) -> int:
         return self.pages[0] if self.pages else 1
 

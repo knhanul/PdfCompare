@@ -174,10 +174,31 @@ class FormFillerPanel(QWidget):
             if not has_any:
                 return
 
+            # 계층형 필드 그룹화 (점 구분 필드명 기준)
+            from collections import defaultdict
+            groups: dict[str, list] = defaultdict(list)
+            ungrouped = []
             for lf in editable_fields:
+                parent = lf.parent_group
+                if parent:
+                    groups[parent].append(lf)
+                else:
+                    ungrouped.append(lf)
+
+            def _add_card(lf):
                 card = self._create_field_card(lf, read_only_mode=False)
                 self._field_cards[lf.field_name] = card
                 self.form_layout.addWidget(card)
+
+            for group_name in sorted(groups.keys()):
+                header = QLabel(f"<b style='color:#1F4E79;'>▸ {group_name} 정보</b>")
+                header.setStyleSheet("margin-top: 10px; margin-bottom: 4px;")
+                self.form_layout.addWidget(header)
+                for lf in groups[group_name]:
+                    _add_card(lf)
+
+            for lf in ungrouped:
+                _add_card(lf)
 
             if readonly_fields:
                 ro_header = QLabel("<b>읽기 전용 / 서명 항목</b>")
@@ -212,7 +233,13 @@ class FormFillerPanel(QWidget):
 
         head = QHBoxLayout()
         req_mark = " <span style='color:#C2410C; font-weight:700;'>*필수</span>" if lf.required else ""
-        multi_loc = f" · {len(lf.widgets)}곳 연결됨" if (len(lf.widgets) > 1 and lf.field_type != "radio") else ""
+        if lf.is_shared_value:
+            locs = ", ".join(f"{w.page_index+1}p" for w in lf.widgets)
+            multi_loc = f" · 동일한 값 사용 ({len(lf.widgets)}곳: {locs})"
+        elif len(lf.widgets) > 1 and lf.field_type == "radio":
+            multi_loc = f" · 라디오 그룹 ({len(lf.widgets)}개 선택지)"
+        else:
+            multi_loc = ""
         title_lbl = QLabel(
             f"<b>{lf.display_name}</b>{req_mark} "
             f"<span style='color:#777; font-size:11px;'>({lf.type_label} · {lf.primary_page}p{multi_loc})</span>"

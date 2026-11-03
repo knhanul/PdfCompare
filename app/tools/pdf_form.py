@@ -37,6 +37,8 @@ from app.common.pdf_form.form_data_io import (
     analyze_import_data,
     apply_import_analysis,
     build_extraction_rows,
+    collect_fields_from_multiple_pdfs,
+    export_collected_rows_to_csv,
     export_fields_to_csv,
     export_fields_to_json,
     export_template_csv,
@@ -341,12 +343,17 @@ class PdfFormWidget(QWidget):
         self.btn_export_template = QPushButton("입력용 CSV 템플릿 저장")
         self.btn_export_template.setObjectName("secondaryBtn")
         self.btn_export_template.clicked.connect(self.export_template_dialog)
+        self.btn_collect_multi = QPushButton("여러 PDF에서 데이터 모으기")
+        self.btn_collect_multi.setObjectName("secondaryBtn")
+        self.btn_collect_multi.setToolTip("동일한 양식으로 작성된 여러 PDF의 입력값을 하나의 표로 모읍니다.")
+        self.btn_collect_multi.clicked.connect(self.collect_from_multiple_pdfs_dialog)
 
         ex_btn_row.addWidget(self.lbl_extract_count)
         ex_btn_row.addSpacing(12)
         ex_btn_row.addWidget(self.chk_include_restricted)
         ex_btn_row.addStretch(1)
         ex_btn_row.addWidget(self.btn_export_template)
+        ex_btn_row.addWidget(self.btn_collect_multi)
         ex_btn_row.addWidget(self.btn_export_csv)
         ex_btn_row.addWidget(self.btn_export_json)
         ex_lay.addLayout(ex_btn_row)
@@ -921,3 +928,30 @@ class PdfFormWidget(QWidget):
         if self.session is not None:
             self.session.close()
         super().closeEvent(event)
+
+    def collect_from_multiple_pdfs_dialog(self):
+        """동일한 양식의 여러 PDF에서 데이터를 모아 CSV로 저장한다."""
+        files, _ = QFileDialog.getOpenFileNames(
+            self, "데이터를 모을 PDF 선택", "", "PDF Files (*.pdf)"
+        )
+        if not files:
+            return
+        include = self.chk_include_restricted.isChecked()
+        try:
+            rows, warnings = collect_fields_from_multiple_pdfs(files, include_restricted=include)
+            if not rows:
+                QMessageBox.information(self, "결과 없음", "추출할 데이터가 없습니다.")
+                return
+            dest, _ = QFileDialog.getSaveFileName(
+                self, "모은 데이터 저장", "collected_form_data.csv", "CSV Files (*.csv)"
+            )
+            if not dest:
+                return
+            export_collected_rows_to_csv(rows, dest)
+            msg = f"{len(files)}개 파일에서 {len(rows)}개 항목을 모아 저장했습니다.\n{dest}"
+            if warnings:
+                msg += "\n\n주의:\n" + "\n".join(warnings[:5])
+            QMessageBox.information(self, "완료", msg)
+        except Exception as exc:
+            QMessageBox.critical(self, "오류", str(exc))
+
