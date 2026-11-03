@@ -562,6 +562,16 @@ class MdiMainWindow(QMainWindow):
         event.accept()
 
 
+def _close_splash_screen():
+    """PyInstaller --splash 스플래시 화면을 닫는다 (개발 모드에서는 무시)."""
+    try:
+        import pyi_splash
+        if pyi_splash.is_alive():
+            pyi_splash.close()
+    except ImportError:
+        pass
+
+
 def run():
     app = QApplication.instance() or QApplication([])
     app.setFont(QFont('Malgun Gothic', 10))
@@ -571,4 +581,5 @@ def run():
         app.installTranslator(translator)
     window = MdiMainWindow()
     window.show()
+    _close_splash_screen()
     return app.exec()
