@@ -192,6 +192,9 @@ class MdiMainWindow(QMainWindow):
             self.update_focus_button(tool)
 
     def update_focus_button(self, tool):
+        self._sync_header_focus_button()
+        if not hasattr(tool, 'btn_focus_mode'):
+            return
         button = tool.btn_focus_mode
         label = '일반 모드로 전환' if self.focus_mode else '집중 모드로 전환'
         icon = QStyle.StandardPixmap.SP_TitleBarNormalButton if self.focus_mode else QStyle.StandardPixmap.SP_TitleBarMaxButton
@@ -200,8 +203,8 @@ class MdiMainWindow(QMainWindow):
         button.setToolTip(label)
         button.setAccessibleName(label)
         button.hide()
-        self._sync_header_focus_button()
-        self.update_focus_layout(tool)
+        if hasattr(tool, 'bottom_action_bar'):
+            self.update_focus_layout(tool)
 
     def _sync_header_focus_button(self):
         button = self.header_focus_btn
@@ -397,16 +400,6 @@ class MdiMainWindow(QMainWindow):
                 'icon': '📄',
             },
             {
-                'key': 'pdf_modify',
-                'menu_title': 'PDF 수정',
-                'window_title': 'PDF 수정 (텍스트 직접 편집)',
-                'module_path': 'app.tools.pdf_modify',
-                'class_name': 'PdfModifyWidget',
-                'singleton': True,
-                'enabled': True,
-                'icon': '✎',
-            },
-            {
                 'key': 'pdf_editor',
                 'menu_title': 'PDF 편집',
                 'window_title': 'PDF 편집 (분할/병합/페이지)',
@@ -415,6 +408,16 @@ class MdiMainWindow(QMainWindow):
                 'singleton': True,
                 'enabled': True,
                 'icon': '✏️',
+            },
+            {
+                'key': 'pdf_form',
+                'menu_title': 'PDF 양식',
+                'window_title': 'PDF 양식',
+                'module_path': 'app.tools.pdf_form',
+                'class_name': 'PdfFormWidget',
+                'singleton': True,
+                'enabled': True,
+                'icon': '📋',
             },
             {
                 'key': 'pdf_create',
@@ -468,8 +471,6 @@ class MdiMainWindow(QMainWindow):
                 module = importlib.import_module(tool_definition['module_path'])
                 factory_class = getattr(module, tool_definition['class_name'])
                 new_tool = factory_class(comparison_settings=self.comparison_settings)
-                if tool_key == 'pdf_modify':
-                    new_tool.compare_requested.connect(self.open_modified_comparison)
                 if hasattr(new_tool, 'btn_focus_mode'):
                     new_tool.btn_focus_mode.clicked.connect(self.toggle_sidebar)
                 # 비교 도구 전환 토글 연결 (영역지정비교 ↔ 전체비교)
@@ -500,37 +501,13 @@ class MdiMainWindow(QMainWindow):
         if hasattr(new_tool, 'switch_toggle'):
             new_tool.switch_toggle.set_active(0 if tool_key == 'pdf_compare' else 1)
 
-    def open_modified_comparison(self, original, modified):
-        if self.comparison_settings.busy:
-            QMessageBox.information(self, 'PDF 수정', '진행 중인 비교가 끝난 후 다시 시도하세요.')
-            return
-        existing = self.tool_cache.get('pdf_hf_compare')
-        if existing and (existing.viewer1.pdf_doc or existing.viewer2.pdf_doc):
-            answer = QMessageBox.question(self, '전체비교',
-                '전체비교에 열려 있는 문서를 원본과 수정본으로 바꿀까요?',
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No)
-            if answer != QMessageBox.StandardButton.Yes:
-                return
-        self.open_tool('pdf_hf_compare')
-        if self.current_tool_key != 'pdf_hf_compare':
-            return
-        tool = self.current_tool_widget
-        for viewer, path in ((tool.viewer1, original), (tool.viewer2, modified)):
-            viewer.clear_all_data()
-            if not viewer.load_pdf(path):
-                QMessageBox.warning(self, '전체비교', '비교할 PDF를 불러오지 못했습니다.')
-                return
-            viewer.update_loaded_pdf_label(path)
-
     def close_current_tool(self):
         """현재 활성화된 도구 닫기"""
         if not self.current_tool_widget:
             return
-        if hasattr(self.current_tool_widget, 'confirm_discard'):
-            if not self.current_tool_widget.confirm_discard():
+        if hasattr(self.current_tool_widget, 'confirm_discard_changes'):
+            if not self.current_tool_widget.confirm_discard_changes():
                 return
-            self.current_tool_widget.dispose()
 
         # close()를 호출하여 closeEvent가 실행되도록 함 (스레드 정리)
         self.current_tool_widget.close()
@@ -561,14 +538,11 @@ class MdiMainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """애플리케이션 종료 시 모든 스레드 정리 (좀비 프로세스 방지)"""
-        # 현재 활성화된 도구의 스레드 정리
         for tool in self.tool_cache.values():
-            if hasattr(tool, 'confirm_discard') and not tool.confirm_discard():
+            if hasattr(tool, 'confirm_discard_changes') and not tool.confirm_discard_changes():
                 event.ignore()
                 return
-        for tool in self.tool_cache.values():
-            if hasattr(tool, 'dispose'):
-                tool.dispose()
+        # 현재 활성화된 도구의 스레드 정리
         if self.current_tool_widget:
             self.current_tool_widget.close()
         

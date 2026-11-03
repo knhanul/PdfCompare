@@ -26,7 +26,7 @@ class SharedHeaderTests(unittest.TestCase):
             ("pdf_compare", "PDF 지정 영역 비교"),
             ("pdf_hf_compare", "PDF 전체 비교"),
             ("pdf_editor", "PDF 편집 (분할/병합/페이지)"),
-            ("pdf_modify", "PDF 수정 (텍스트 직접 편집)"),
+            ("pdf_form", "PDF 양식"),
             ("pdf_create", "PDF 생성"),
             ("file_rename", "파일 이름 관리"),
         ):
@@ -67,7 +67,7 @@ class SharedHeaderTests(unittest.TestCase):
     def test_legend_visibility_is_limited_to_comparison_tools(self):
         for key, expected in (
             ("pdf_compare", True), ("pdf_hf_compare", True),
-            ("pdf_modify", False), ("pdf_editor", False),
+            ("pdf_editor", False), ("pdf_form", False),
             ("pdf_create", False), ("file_rename", False),
         ):
             with self.subTest(tool=key):
