@@ -598,9 +598,22 @@ class PDFViewer(QScrollArea):
                     return
         event.ignore()
 
-    def reload_pages(self):
+    def reload_pages(self, preserve_scroll=False):
         if not self.pdf_doc:
             return
+        scroll_position = None
+        if preserve_scroll:
+            vertical_bar = self.verticalScrollBar()
+            horizontal_bar = self.horizontalScrollBar()
+            vertical_ratio = (
+                vertical_bar.value() / vertical_bar.maximum()
+                if vertical_bar.maximum() else 0.0
+            )
+            horizontal_ratio = (
+                horizontal_bar.value() / horizontal_bar.maximum()
+                if horizontal_bar.maximum() else 0.0
+            )
+            scroll_position = (vertical_ratio, horizontal_ratio)
         self.cancel_selection(refresh=False)
         
         # Hide drop label when PDF is loaded
@@ -634,7 +647,21 @@ class PDFViewer(QScrollArea):
             self.page_labels.append(lbl)
             self.page_base_pixmaps.append(base_pixmap)
         self.refresh_highlights()
-        QTimer.singleShot(100, self._ensure_header_footer_visible)
+        if scroll_position is None:
+            QTimer.singleShot(100, self._ensure_header_footer_visible)
+        else:
+            QTimer.singleShot(
+                100,
+                lambda position=scroll_position: self._restore_scroll_position(*position),
+            )
+
+    def _restore_scroll_position(self, vertical_ratio, horizontal_ratio):
+        self.container.adjustSize()
+        QApplication.processEvents()
+        vertical_bar = self.verticalScrollBar()
+        horizontal_bar = self.horizontalScrollBar()
+        vertical_bar.setValue(round(vertical_ratio * vertical_bar.maximum()))
+        horizontal_bar.setValue(round(horizontal_ratio * horizontal_bar.maximum()))
 
     def _ensure_header_footer_visible(self):
         """첫 페이지의 Header와 Footer 조절 영역이 모두 보이도록 스크롤"""
@@ -792,12 +819,12 @@ class PDFViewer(QScrollArea):
     def zoom_in(self):
         self.scale *= 1.2
         self.update_zoom_label()
-        self.reload_pages()
+        self.reload_pages(preserve_scroll=True)
 
     def zoom_out(self):
         self.scale /= 1.2
         self.update_zoom_label()
-        self.reload_pages()
+        self.reload_pages(preserve_scroll=True)
 
     def fit_to_width(self):
         if not self.pdf_doc or len(self.pdf_doc) == 0:
@@ -807,7 +834,7 @@ class PDFViewer(QScrollArea):
         available_width = max(100, self.viewport().width() - 40)
         self.scale = available_width / page_rect.width
         self.update_zoom_label()
-        self.reload_pages()
+        self.reload_pages(preserve_scroll=True)
 
     def fit_to_page(self):
         if not self.pdf_doc or len(self.pdf_doc) == 0:
@@ -820,7 +847,7 @@ class PDFViewer(QScrollArea):
         height_scale = available_height / page_rect.height
         self.scale = min(width_scale, height_scale)
         self.update_zoom_label()
-        self.reload_pages()
+        self.reload_pages(preserve_scroll=True)
 
     def update_zoom_label(self):
         self.zoom_label.blockSignals(True)
@@ -844,7 +871,7 @@ class PDFViewer(QScrollArea):
             return
         self.scale = new_scale
         self.update_zoom_label()
-        self.reload_pages()
+        self.reload_pages(preserve_scroll=True)
 
     # Search methods delegated to helper
     def on_search_text_changed(self, text):
@@ -1864,4 +1891,3 @@ class PdfCompareWidget(ComparisonSettingsMixin, QWidget):
             viewers[i].clear_all_data()
             if viewers[i].load_pdf(path):
                 viewers[i].update_loaded_pdf_label(path)
-

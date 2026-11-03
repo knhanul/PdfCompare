@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pymupdf
 from PyQt6.QtCore import QRect
 from PyQt6.QtGui import QColor
+from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from app.common.pdf_compare_worker import PdfCompareWorker
@@ -76,6 +77,70 @@ class MultiPageSelectionTests(unittest.TestCase):
                     self.assertEqual(before, [(action.isVisible(), action.minimumSize(), action.maximumSize())
                                               for action in actions])
                 self.app.processEvents()
+
+    def test_zoom_preserves_scroll_position_in_both_viewers(self):
+        path = self.make_pdf('zoom.pdf', [f'Page {i}' for i in range(8)])
+
+        for viewer_type in (PDFViewer, HFViewer):
+            with self.subTest(viewer=viewer_type.__name__):
+                viewer = viewer_type()
+                viewer.resize(320, 360)
+                viewer.show()
+                self.addCleanup(viewer.close)
+                self.assertTrue(viewer.load_pdf(path))
+                self.addCleanup(lambda v=viewer: v.pdf_doc.close() if v.pdf_doc else None)
+                QTest.qWait(150)
+
+                vertical = viewer.verticalScrollBar()
+                horizontal = viewer.horizontalScrollBar()
+                self.assertGreater(vertical.maximum(), 0)
+                vertical.setValue(round(vertical.maximum() * 0.65))
+                if horizontal.maximum():
+                    horizontal.setValue(round(horizontal.maximum() * 0.4))
+                highlight = ((40, 50, 100, 80), QColor(255, 0, 0))
+                if viewer_type is PDFViewer:
+                    highlight = ((40, 50, 100, 80), 1, QColor(255, 0, 0))
+                viewer.word_highlights = {0: [highlight]}
+                viewer.last_compared_area = {0: [(30, 40, 120, 90)]}
+                self.app.processEvents()
+                before = (
+                    vertical.value() / vertical.maximum(),
+                    horizontal.value() / horizontal.maximum() if horizontal.maximum() else 0.0,
+                )
+
+                viewer.zoom_in()
+                QTest.qWait(150)
+                vertical = viewer.verticalScrollBar()
+                horizontal = viewer.horizontalScrollBar()
+                after = (
+                    vertical.value() / vertical.maximum(),
+                    horizontal.value() / horizontal.maximum() if horizontal.maximum() else 0.0,
+                )
+                self.assertAlmostEqual(before[0], after[0], delta=0.02)
+                self.assertAlmostEqual(before[1], after[1], delta=0.02)
+                self.assertIn(0, viewer.word_highlights)
+                self.assertEqual(viewer.last_compared_area, {0: [(30, 40, 120, 90)]})
+
+                # All user-triggered zoom paths preserve scroll; ordinary reload remains default.
+                actions = (
+                    viewer.zoom_in,
+                    viewer.zoom_out,
+                    viewer.fit_to_width,
+                    viewer.fit_to_page,
+                )
+                for action in actions:
+                    with patch.object(viewer, 'reload_pages') as reload_pages:
+                        action()
+                        reload_pages.assert_called_once_with(preserve_scroll=True)
+
+                with patch.object(viewer, 'reload_pages') as reload_pages:
+                    viewer.zoom_label.setText('137%')
+                    viewer._apply_zoom_input()
+                    reload_pages.assert_called_once_with(preserve_scroll=True)
+
+                with patch.object(viewer, 'reload_pages') as reload_pages:
+                    viewer.reload_pages()
+                    reload_pages.assert_called_once_with()
 
     def test_bottom_tool_switch_preserves_focus_and_scroll_toggle(self):
         from app.main_window import MdiMainWindow
