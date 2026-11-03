@@ -1,5 +1,4 @@
 import os
-import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -14,7 +13,8 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
-from app.common.pdf_convert import SUPPORTED_EXTS, convert_to_pdf, is_supported, merge_pdfs, unique_pdf_path
+from app.common.pdf_convert import SUPPORTED_EXTS, is_supported
+from app.common.pdf_convert_worker import ConvertThreadManager
 from app.common.pdf_images import collect_images, extract_pdf_text, save_image
 from app.common.styles import COLOR_BORDER, COLOR_PRIMARY, MODERN_QSS
 from app.common.loading_dialog import note_progress, style_task_progress
@@ -89,6 +89,10 @@ class PdfCreateWidget(QWidget):
         self._updating_checks = False
         self._splitter_ready = False
         self.icon_provider = QFileIconProvider()
+        self.convert_manager = None
+        self._converting = False
+        self._skipped_pdfs = 0
+        self._convert_result = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)
@@ -176,10 +180,15 @@ class PdfCreateWidget(QWidget):
         self.btn_text = QPushButton("글자 추출")
         self.btn_text.setToolTip("체크한 PDF의 글자를 텍스트 파일로 저장합니다.")
         self.btn_text.clicked.connect(self.extract_text)
+        self.btn_cancel = QPushButton("변환 취소")
+        self.btn_cancel.setToolTip("진행 중인 변환을 중지합니다. 현재 변환 중인 파일은 끝까지 처리된 뒤 멈춥니다.")
+        self.btn_cancel.clicked.connect(self.cancel_conversion)
+        self.btn_cancel.hide()
         action_row.addWidget(self.btn_convert)
         action_row.addWidget(self.merge_check)
         action_row.addWidget(self.btn_extract)
         action_row.addWidget(self.btn_text)
+        action_row.addWidget(self.btn_cancel)
         right_layout.addLayout(action_row)
 
         self.progress = QProgressBar()
@@ -437,68 +446,130 @@ class PdfCreateWidget(QWidget):
         return str(Path(src).parent)
 
     def convert_checked(self):
+        if self._converting:
+            return
         paths = self._checked_paths()
         if not paths:
             QMessageBox.warning(self, "알림", "PDF로 만들 파일을 체크하세요.")
             return
         if self.merge_check.isChecked():
-            self._convert_merged(paths)
+            jobs = [(src, self._target_dir(src)) for src in paths]
+            self._start_conversion(
+                jobs, merge=True,
+                merge_dir=self._target_dir(paths[0]),
+                merge_stem=f"{Path(paths[0]).stem}_병합",
+            )
             return
         others = [src for src in paths if Path(src).suffix.lower() != ".pdf"]
-        skipped = len(paths) - len(others)
+        self._skipped_pdfs = len(paths) - len(others)
         if not others:
             QMessageBox.information(self, "알림", "PDF만 체크되어 있습니다.\n한 개 파일로 병합을 체크하거나 이미지 추출, 글자 추출을 사용하세요.")
             return
+        jobs = [(src, self._target_dir(src)) for src in others]
+        self._start_conversion(jobs, merge=False)
+
+    def _start_conversion(self, jobs, merge, merge_dir="", merge_stem=""):
+        """변환 작업을 백그라운드 스레드에서 시작 (COM 블로킹 시에도 UI 유지)"""
+        self._converting = True
+        self._convert_result = None
+        self.progress.setMaximum(max(len(jobs), 1))
+        self.progress.setValue(0)
         self.progress.setVisible(True)
-        self.progress.setMaximum(len(others))
-        ok = 0
-        failed = []
-        for index, src in enumerate(others, start=1):
-            try:
-                dest = convert_to_pdf(src, self._target_dir(src))
-            except Exception as error:
-                failed.append(f"{Path(src).name}: {error}")
-                self._add_history(f"실패 {Path(src).name}", [], str(error))
-            else:
-                ok += 1
-                self._add_history(f"변환 {Path(src).name}", [str(dest)])
-            note_progress(self.progress, index)
-            self.status_label.setText(f"진행 {index}/{len(others)}")
+        self._set_action_buttons_enabled(False)
+        self.btn_cancel.setEnabled(True)
+        self.btn_cancel.setVisible(True)
+        self.status_label.setText("변환 준비 중...")
+        if not self.convert_manager:
+            self.convert_manager = ConvertThreadManager(self)
+            self.convert_manager.progress.connect(self._on_convert_progress)
+            self.convert_manager.file_done.connect(self._on_convert_file_done)
+            self.convert_manager.result_ready.connect(self._on_convert_result)
+            self.convert_manager.finished.connect(self._on_convert_finished)
+            self.convert_manager.error.connect(self._on_convert_error)
+        self.convert_manager.setup_worker(
+            jobs, merge=merge, merge_dir=merge_dir, merge_stem=merge_stem)
+        self.convert_manager.start()
+
+    def cancel_conversion(self):
+        """변환 취소 - 현재 파일 처리 후 중지 (COM이 멈춘 경우 강제 정리)"""
+        if not self._converting or not self.convert_manager:
+            return
+        self.btn_cancel.setEnabled(False)
+        self.status_label.setText("취소 요청 중... (현재 파일 완료 후 중지)")
+        self.convert_manager.cancel()
+        # 멈춘 COM 호출이 강제 종료되면 finished 신호가 오지 않으므로 UI를 여기서 복원
+        self._finish_conversion_ui()
+        self.status_label.setText("변환을 중지했습니다.")
+
+    def _set_action_buttons_enabled(self, enabled):
+        for widget in (self.btn_convert, self.merge_check, self.btn_extract, self.btn_text):
+            widget.setEnabled(enabled)
+
+    def _finish_conversion_ui(self):
         self.progress.setVisible(False)
+        self.btn_cancel.setVisible(False)
+        self._set_action_buttons_enabled(True)
+        self._converting = False
+
+    def _on_convert_progress(self, current, total):
+        self.progress.setMaximum(max(total, 1))
+        self.progress.setValue(current)
+        self.status_label.setText(f"진행 {current}/{total}")
+
+    def _on_convert_file_done(self, src, ok, dest, error):
+        name = Path(src).name
+        if ok:
+            if dest and dest != src:
+                self._add_history(f"변환 {name}", [dest])
+        else:
+            self._add_history(f"실패 {name}", [], error)
+
+    def _on_convert_result(self, result):
+        self._convert_result = result
+
+    def _on_convert_error(self, message):
+        self._finish_conversion_ui()
+        self._convert_result = None
+        first_line = (message or "알 수 없는 오류").splitlines()[0]
+        QMessageBox.warning(self, "변환 오류", f"변환 중 오류가 발생했습니다.\n{first_line}")
+        self.status_label.setText("변환 오류")
+
+    def _on_convert_finished(self):
+        self._finish_conversion_ui()
+        result = self._convert_result or {}
+        self._convert_result = None
+        skipped = self._skipped_pdfs
+        self._skipped_pdfs = 0
+        if result.get('kind') == 'merged':
+            if result.get('cancelled'):
+                self.status_label.setText("병합을 중지했습니다.")
+            elif result.get('ok'):
+                self._add_history(f"병합 {result.get('count', 0)}개", [result.get('dest', '')])
+                QMessageBox.information(self, "변환 결과", "체크한 파일을 하나의 PDF로 저장했습니다.")
+                self.status_label.setText("성공 1개, 실패 0개")
+            else:
+                failed = result.get('failed', [])
+                QMessageBox.warning(self, "변환 결과", f"성공 0개, 실패 {len(failed)}개\n\n" + "\n".join(failed[:8]))
+                self.status_label.setText(f"성공 0개, 실패 {len(failed)}개")
+            return
+        ok = result.get('ok', 0)
+        failed = result.get('failed', [])
         extra = f"\nPDF {skipped}개는 병합, 이미지 추출, 글자 추출에서 처리됩니다." if skipped else ""
-        if failed:
+        if result.get('cancelled'):
+            QMessageBox.information(self, "변환 결과", f"변환을 중지했습니다. 성공 {ok}개, 실패 {len(failed)}개{extra}")
+        elif failed:
             QMessageBox.warning(self, "변환 결과", f"성공 {ok}개, 실패 {len(failed)}개{extra}\n\n" + "\n".join(failed[:8]))
         else:
             QMessageBox.information(self, "변환 결과", f"{ok}개 파일을 PDF로 저장했습니다.{extra}")
         self.status_label.setText(f"성공 {ok}개, 실패 {len(failed)}개")
 
-    def _convert_merged(self, paths):
-        self.progress.setVisible(True)
-        self.progress.setMaximum(len(paths))
-        failed = []
-        with tempfile.TemporaryDirectory() as temp_dir:
-            pdfs = []
-            for index, src in enumerate(paths, start=1):
-                try:
-                    if Path(src).suffix.lower() == ".pdf":
-                        pdfs.append(src)
-                    else:
-                        pdfs.append(str(convert_to_pdf(src, temp_dir)))
-                except Exception as error:
-                    failed.append(f"{Path(src).name}: {error}")
-                    self._add_history(f"실패 {Path(src).name}", [], str(error))
-                    note_progress(self.progress, index)
-                    self.progress.setVisible(False)
-                    QMessageBox.warning(self, "변환 결과", f"성공 0개, 실패 {len(failed)}개\n\n" + "\n".join(failed[:8]))
-                    return
-                note_progress(self.progress, index)
-                self.status_label.setText(f"진행 {index}/{len(paths)}")
-            dest = unique_pdf_path(self._target_dir(paths[0]), f"{Path(paths[0]).stem}_병합")
-            merge_pdfs(pdfs, dest)
-            self._add_history(f"병합 {len(pdfs)}개", [str(dest)])
-        self.progress.setVisible(False)
-        QMessageBox.information(self, "변환 결과", "체크한 파일을 하나의 PDF로 저장했습니다.")
-        self.status_label.setText("성공 1개, 실패 0개")
+    def closeEvent(self, event):
+        """위젯 종료 시 변환 스레드 정리 (멈춘 COM 호출이 있어도 종료 보장)"""
+        if self.convert_manager:
+            self.convert_manager.cancel()
+            self.convert_manager.cleanup()
+            self.convert_manager = None
+        super().closeEvent(event)
 
     def extract_images(self):
         pdfs = [src for src in self._checked_paths() if Path(src).suffix.lower() == ".pdf"]
