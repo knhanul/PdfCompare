@@ -703,6 +703,10 @@ class PDFViewer(QScrollArea):
 
     def _draw_completed_regions(self, painter, page_index):
         """비교가 끝난 영역을 번호 박스로 그린다. 양쪽 PDF에 같은 번호가 짝이다."""
+        accent = QColor(164, 71, 53)          # POSID accent
+        fill = QColor(164, 71, 53, 28)        # 아주 옅은 채움
+        badge_bg = QColor(164, 71, 53)
+        badge_text = QColor(255, 255, 255)
         for region in self.completed_regions:
             boxes = region.get("areas", {}).get(page_index) or []
             number = str(region.get("number", ""))
@@ -714,13 +718,19 @@ class PDFViewer(QScrollArea):
                 )
                 if rect.width() < 2 or rect.height() < 2:
                     continue
-                painter.setPen(QPen(QColor(0, 102, 204), 2))
-                painter.setBrush(Qt.BrushStyle.NoBrush)
-                painter.drawRect(rect)
-                badge = QRect(rect.x(), max(0, rect.y() - 16), 20, 16)
-                painter.fillRect(badge, QColor(0, 102, 204))
-                painter.setPen(QColor(255, 255, 255))
-                painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
+                # 테두리 + 옅은 채움
+                painter.setPen(QPen(accent, 2))
+                painter.setBrush(fill)
+                painter.drawRoundedRect(rect, 4, 4)
+                # 번호 배지: 좌상단 모서리에 겹쳐 표시
+                badge_w = 18 if len(number) == 1 else 24
+                badge_h = 16
+                badge = QRect(rect.x() - 1, max(0, rect.y() - badge_h + 2), badge_w, badge_h)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(badge_bg)
+                painter.drawRoundedRect(badge, 4, 4)
+                painter.setPen(badge_text)
+                painter.setFont(QFont("Malgun Gothic", 8, QFont.Weight.Bold))
                 painter.drawText(badge, Qt.AlignmentFlag.AlignCenter, number)
 
     def on_selection_complete(self, page_num, rect):
