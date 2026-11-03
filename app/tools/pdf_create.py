@@ -153,15 +153,16 @@ class PdfCreateWidget(QWidget):
         convert_page = QWidget()
         convert_layout = QVBoxLayout(convert_page)
         convert_layout.setContentsMargins(0, 8, 0, 0)
-        convert_hint = QLabel(
-            "변환 가능: 한글(hwp, hwpx), 워드(doc, docx, rtf), 엑셀(xls, xlsx), "
-            "파워포인트(ppt, pptx), 오픈오피스(odt, ods, odp), 마크다운(md), "
-            "텍스트(txt, csv, log), 이미지(png, jpg, jpeg, bmp, gif, tif, tiff, webp).\n"
-            "hwp·doc·xls·ppt·rtf·odt 계열은 한컴오피스 또는 LibreOffice가 필요합니다. "
-            "병합을 체크하면 기존 PDF도 함께 한 파일로 합칩니다."
-        )
+        convert_hint = QLabel("일반 문서와 이미지를 PDF로 만듭니다. 병합을 체크하면 기존 PDF도 함께 한 파일로 합칩니다.")
         convert_hint.setWordWrap(True)
         convert_layout.addWidget(convert_hint)
+        convert_formats = QLabel(
+            "변환 가능: hwp, hwpx, doc, docx, rtf, xls, xlsx, ppt, pptx, odt, ods, odp, md, txt, csv, log, "
+            "png, jpg, jpeg, bmp, gif, tif, tiff, webp"
+        )
+        convert_formats.setWordWrap(True)
+        convert_formats.setStyleSheet("color: #6E6863; font-size: 12px;")
+        convert_layout.addWidget(convert_formats)
         convert_row = QHBoxLayout()
         self.btn_convert = QPushButton("변환 실행")
         self.btn_convert.setObjectName("actionBtn")
@@ -200,7 +201,7 @@ class PdfCreateWidget(QWidget):
         extract_layout.addStretch()
         self.action_tabs.addTab(extract_page, "추출")
         self.action_tabs.currentChanged.connect(self._on_action_tab)
-        self.action_tabs.setMaximumHeight(150)
+        self.action_tabs.setMaximumHeight(170)
         right_layout.addWidget(self.action_tabs)
 
         folder_row = QHBoxLayout()
@@ -474,7 +475,7 @@ class PdfCreateWidget(QWidget):
         if index == 1:
             self.status_label.setText("추출 대상: 체크한 PDF. 이미지는 원본 형식, 글자는 txt로 저장합니다.")
         else:
-            self.status_label.setText("변환: hwp/hwpx, doc/docx/rtf, xls/xlsx, ppt/pptx, odt/ods/odp, md, txt/csv/log, png/jpg/jpeg/bmp/gif/tif/tiff/webp")
+            self.status_label.setText("일반 문서와 이미지를 PDF로 만듭니다.")
 
     def _target_dir(self, src):
         if self.output_dir and os.path.isdir(self.output_dir):
