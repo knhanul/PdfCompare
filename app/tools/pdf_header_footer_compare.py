@@ -17,7 +17,6 @@ from app.common.styles import (
 )
 from app.common.pdf_search_helper import PDFSearchHelper
 from app.common.pdf_compare_worker import CompareThreadManager
-from app.common.pdf_structure_compare import compare_structure
 from app.common.pdf_file_open import open_pdf_dialog, try_open_pdf, show_open_error
 from app.common.pdf_text_normalizer import collect_raw_chars, normalize_raw_chars
 from app.common.comparison_options import ComparisonOptions
@@ -321,7 +320,6 @@ class HFViewer(QScrollArea):
         self.vbox.addWidget(self.drop_label)
 
         self.open_pdf_btn = QPushButton('📁 PDF 파일 선택')
-        self.open_pdf_btn.setToolTip('이 쪽에 불러올 PDF 1개 선택\n여러 파일은 하단 「여러 PDF 선택」 사용')
         self.open_pdf_btn.setObjectName('pdfOpenButton')
         self.open_pdf_btn.setFixedHeight(48)
         self.open_pdf_btn.setMinimumWidth(180)
@@ -385,7 +383,6 @@ class HFViewer(QScrollArea):
             self.header_ratio = self.DEFAULT_EXCLUSION_RATIO
             self.footer_ratio = self.DEFAULT_EXCLUSION_RATIO
             self.pdf_doc = pymupdf.open(path)
-            self.source_path = str(path)
             self.reload_pages()
             return True
         except Exception:
@@ -869,14 +866,6 @@ class HFCompareWidget(ComparisonSettingsMixin, QWidget):
         bl.addWidget(self.sync_scroll_cb)
 
         # 결과 목록 버튼 - 동시 스크롤 오른쪽
-        self.btn_open_multi = QPushButton('📁 여러 PDF 선택')
-        self.btn_open_multi.setObjectName('compareUtilityBtn')
-        self.btn_open_multi.setFixedHeight(40)
-        self.btn_open_multi.setMinimumWidth(130)
-        self.btn_open_multi.setToolTip('한 번에 1~2개 PDF를 선택해 왼쪽/오른쪽에 불러옵니다')
-        self.btn_open_multi.clicked.connect(self.open_multiple_pdfs)
-        bl.addWidget(self.btn_open_multi)
-
         self.btn_diff_list = QPushButton('📋 비교결과')
         self.btn_diff_list.setObjectName('compareUtilityBtn')
         self.btn_diff_list.setFixedHeight(40)
@@ -893,14 +882,6 @@ class HFCompareWidget(ComparisonSettingsMixin, QWidget):
         self.btn_compare.setMinimumWidth(150)
         self.btn_compare.clicked.connect(self.request_comparison)
         bl.addWidget(self.btn_compare)
-
-        self.btn_structure = QPushButton("📄 구조 비교")
-        self.btn_structure.setObjectName("compareUtilityBtn")
-        self.btn_structure.setFixedHeight(40)
-        self.btn_structure.setMinimumWidth(110)
-        self.btn_structure.setToolTip("문서 구조(제목·문단·표)를 기준으로 차이를 요약합니다.")
-        self.btn_structure.clicked.connect(self.run_structure_comparison)
-        bl.addWidget(self.btn_structure)
 
         bl.addStretch()
 
@@ -1641,67 +1622,3 @@ class HFCompareWidget(ComparisonSettingsMixin, QWidget):
         text = '\n'.join(lines)
         QApplication.clipboard().setText(text)
         QMessageBox.information(self, '복사 완료', '결과 목록이 클립보드에 복사되었습니다.')
-
-    def run_structure_comparison(self):
-        """문서 구조 기반 비교를 실행하고 요약을 표시한다."""
-        if not self.viewer1.pdf_doc or not self.viewer2.pdf_doc:
-            QMessageBox.warning(self, "안내", "비교할 PDF 두 개를 먼저 열어주세요.")
-            return
-        path1 = getattr(self.viewer1, "source_path", None) or getattr(self.viewer1.pdf_doc, "name", None)
-        path2 = getattr(self.viewer2, "source_path", None) or getattr(self.viewer2.pdf_doc, "name", None)
-        if not path1 or not path2:
-            QMessageBox.warning(self, "안내", "PDF 경로를 확인할 수 없습니다.")
-            return
-        try:
-            self.show_loading(True, "구조 비교 중...")
-            result = compare_structure(str(path1), str(path2))
-            self.show_loading(False)
-            self._show_structure_result(result)
-        except Exception as exc:
-            self.show_loading(False)
-            QMessageBox.critical(self, "구조 비교 오류", str(exc))
-
-    def _show_structure_result(self, result: dict):
-        s = result["summary"]
-        used = "Markdown 구조" if result.get("used_markdown") else "텍스트 블록"
-        msg = (
-            f"<b>구조 비교 결과</b> ({used})<br><br>"
-            f"• 텍스트 수정: {s['text_modified']}건<br>"
-            f"• 추가 내용: {s['added']}건<br>"
-            f"• 삭제 내용: {s['deleted']}건<br>"
-            f"• 위치 이동: {s['moved']}건<br>"
-            f"• 표 변경: {s['table_changes']}건<br>"
-            f"• 검토 필요: {s['uncertain']}건<br><br>"
-            f"페이지 수: {result['page_counts'][0]} ↔ {result['page_counts'][1]}"
-        )
-        # 변경 목록 일부 표시
-        changes = result.get("changes", [])[:15]
-        if changes:
-            msg += "<br><br><b>주요 변경 (상위 15건)</b><br>"
-            for c in changes:
-                left = (c["left"] or "").replace("<", "<")[:60]
-                right = (c["right"] or "").replace("<", "<")[:60]
-                msg += f"• [{c['type']}] {left} → {right}<br>"
-        dlg = QMessageBox(self)
-        dlg.setWindowTitle("문서 구조 비교")
-        dlg.setTextFormat(Qt.TextFormat.RichText)
-        dlg.setText(msg)
-        dlg.exec()
-
-    def open_multiple_pdfs(self):
-        """한 번에 1~2개 PDF를 선택해 양쪽 뷰어에 불러온다."""
-        paths = open_pdf_dialog(self, '비교할 PDF 선택 (1~2개)', multi=True)
-        if not paths:
-            return
-        if len(paths) > 2:
-            QMessageBox.information(self, '안내', '최대 2개까지 선택할 수 있습니다. 처음 2개만 사용합니다.')
-            paths = paths[:2]
-        viewers = [self.viewer1, self.viewer2]
-        for i, path in enumerate(paths):
-            doc, err = try_open_pdf(path)
-            if doc is None:
-                show_open_error(self, path, err)
-                continue
-            doc.close()
-            if viewers[i].load_pdf(path):
-                viewers[i].update_loaded_pdf_label(path)
