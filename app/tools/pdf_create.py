@@ -149,7 +149,6 @@ class PdfCreateWidget(QWidget):
         right_layout.setContentsMargins(0, 0, 0, 0)
 
         self.action_tabs = QTabWidget()
-        self.action_tabs.currentChanged.connect(self._on_action_tab)
 
         convert_page = QWidget()
         convert_layout = QVBoxLayout(convert_page)
@@ -194,6 +193,7 @@ class PdfCreateWidget(QWidget):
         extract_layout.addLayout(extract_row)
         extract_layout.addStretch()
         self.action_tabs.addTab(extract_page, "추출")
+        self.action_tabs.currentChanged.connect(self._on_action_tab)
         self.action_tabs.setMaximumHeight(150)
         right_layout.addWidget(self.action_tabs)
 

@@ -5,7 +5,10 @@ PDF Convert Worker - 백그라운드 스레드에서 파일→PDF 변환 수행
 UI 스레드가 멈추지 않도록 QThread + Worker 패턴으로 분리합니다.
 COM은 스레드별 초기화가 필요하므로 run()에서 CoInitialize를 호출합니다.
 """
+import os
+import shutil
 import tempfile
+import time
 import traceback
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -104,7 +107,8 @@ class PdfConvertWorker(QObject):
         """체크한 파일을 변환 후 하나의 PDF로 병합"""
         failed = []
         total = len(self._jobs)
-        with tempfile.TemporaryDirectory() as temp_dir:
+        temp_dir = self._make_merge_temp()
+        try:
             pdfs = []
             for index, (src, target) in enumerate(self._jobs, start=1):
                 if not self._is_running:
@@ -144,6 +148,46 @@ class PdfConvertWorker(QObject):
                 'count': len(pdfs),
                 'failed': failed,
             })
+        finally:
+            _remove_tree(temp_dir)
+
+    def _make_merge_temp(self):
+        """병합 중간 산출물용 임시 폴더를 결과 폴더 안에 숨김으로 만든다.
+
+        시스템 TEMP가 공용 문서 폴더로 잡힌 환경(예: 알PDF CreatorTemp)에서
+        변환 중간 PDF가 사용자에게 보이는 것을 막기 위함이다.
+        """
+        base = Path(self._merge_dir)
+        base.mkdir(parents=True, exist_ok=True)
+        for stale in base.glob("~pdfmerge_*"):
+            if stale.is_dir():
+                _remove_tree(stale)
+        tmp = Path(tempfile.mkdtemp(prefix="~pdfmerge_", dir=base))
+        _hide_path(tmp)
+        return str(tmp)
+
+
+def _hide_path(path):
+    """Windows에서 폴더를 숨김 처리해 탐색기에 보이지 않게 한다."""
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+        ctypes.windll.kernel32.SetFileAttributesW(str(path), 0x02)  # FILE_ATTRIBUTE_HIDDEN
+    except Exception:
+        pass
+
+
+def _remove_tree(path):
+    """백신/외부 프로그램의 잠금으로 즉시 지워지지 않는 경우를 대비해 재시도 후 삭제"""
+    for _ in range(3):
+        try:
+            shutil.rmtree(path, ignore_errors=True)
+        except Exception:
+            pass
+        if not Path(path).exists():
+            return
+        time.sleep(0.3)
 
 
 class ConvertThreadManager(QObject):
