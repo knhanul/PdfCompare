@@ -83,9 +83,7 @@ def convert_to_pdf(src, out_dir):
             elif ext == ".hwpx":
                 _text_to_pdf(_hwpx_text(src), dest)
             else:
-                raise RuntimeError(
-                    "이 형식은 LibreOffice 또는 한글/오피스가 설치되어 있어야 PDF로 변환할 수 있습니다."
-                )
+                raise RuntimeError(_external_convert_error(ext))
     else:
         raise RuntimeError("지원하지 않는 형식입니다.")
     return dest
@@ -228,10 +226,46 @@ def _wrap(font, text, fontsize, max_width):
     return lines
 
 
+_last_external_error = ""
+
+
 def _try_external_convert(src, dest):
+    global _last_external_error
+    _last_external_error = ""
     if _convert_with_soffice(src, dest):
         return True
     return _convert_with_com(src, dest)
+
+
+def _external_convert_error(ext):
+    detail = (_last_external_error or "").strip()
+    if ext in {".hwp", ".hwpx"}:
+        if "win32com" in detail or "pywin32" in detail:
+            return (
+                "한글은 설치되어 있어도 변환에 필요한 pywin32가 없습니다.\n"
+                "pip install pywin32 후 다시 시도해 주세요."
+            )
+        installed = _hangul_installed()
+        base = (
+            "한컴오피스 한글이 설치되어 있지만 PDF 변환에 실패했습니다."
+            if installed else
+            "이 형식은 LibreOffice 또는 한컴오피스 한글이 설치되어 있어야 PDF로 변환할 수 있습니다."
+        )
+        if detail:
+            return f"{base}\n원인: {detail}"
+        return base
+    return "이 형식은 LibreOffice 또는 한글/오피스가 설치되어 있어야 PDF로 변환할 수 있습니다."
+
+
+def _hangul_installed():
+    candidates = [
+        r"C:\Program Files\Hnc\Office 2024",
+        r"C:\Program Files\Hnc\HOffice130",
+        r"C:\Program Files\Hnc\HOffice120",
+        r"C:\Program Files (x86)\Hnc\Hwp80",
+        r"C:\Program Files\Hnc\Hwp80",
+    ]
+    return any(os.path.isdir(path) for path in candidates)
 
 
 def _soffice_path():
@@ -267,11 +301,13 @@ def _convert_with_soffice(src, dest):
 
 
 def _convert_with_com(src, dest):
+    global _last_external_error
     if os.name != "nt":
         return False
     try:
         import win32com.client
     except ImportError:
+        _last_external_error = "pywin32(win32com) 모듈이 없습니다."
         return False
     ext = Path(src).suffix.lower()
     src_text = str(src)
@@ -336,26 +372,72 @@ def _convert_powerpoint_com(win32com, src, dest):
 
 
 def _convert_hwp_com(win32com, src, dest):
-    app = None
-    try:
-        app = win32com.client.gencache.EnsureDispatch("HWPFrame.HwpObject")
-        app.RegisterModule("FilePathCheckDLL", "FilePathCheckerModule")
-        app.Open(src)
-        action = app.HParameterSet.HFileOpenSave
-        app.HAction.GetDefault("FileSaveAs_S", action.HSet)
-        action.filename = dest
-        action.Format = "PDF"
-        app.HAction.Execute("FileSaveAs_S", action.HSet)
-        app.Clear(1)
-        return Path(dest).exists()
-    except Exception:
-        return False
-    finally:
-        if app is not None:
+    """한컴오피스 2024 포함, 한글 COM으로 PDF 저장을 시도한다."""
+    global _last_external_error
+    progids = ("HWPFrame.HwpObject", "Hwp.HwpObject", "HWPFrame.HwpObject.1")
+    modules = ("FilePathCheckerModule", "FilePathCheckerModuleExample")
+    last_error = ""
+    for progid in progids:
+        app = None
+        try:
+            app = win32com.client.Dispatch(progid)
+            for module in modules:
+                try:
+                    app.RegisterModule("FilePathCheckDLL", module)
+                except Exception:
+                    pass
+            opened = False
+            for flags in ("", "lock:false;forceopen:true", "forceopen:true"):
+                try:
+                    result = app.Open(src, "", flags)
+                    if result is not False:
+                        opened = True
+                        break
+                except Exception as exc:
+                    last_error = str(exc)
+            if not opened:
+                try:
+                    app.Open(src)
+                    opened = True
+                except Exception as exc:
+                    last_error = str(exc)
+                    continue
+            saved = False
             try:
-                app.Quit()
+                saved = bool(app.SaveAs(dest, "PDF", ""))
+            except Exception as exc:
+                last_error = str(exc)
+            if not saved:
+                try:
+                    pset = app.HParameterSet.HFileOpenSave
+                    app.HAction.GetDefault("FileSaveAs_S", pset.HSet)
+                    for attr in ("FileName", "filename"):
+                        try:
+                            setattr(pset, attr, dest)
+                        except Exception:
+                            pass
+                    pset.Format = "PDF"
+                    app.HAction.Execute("FileSaveAs_S", pset.HSet)
+                    saved = Path(dest).exists()
+                except Exception as exc:
+                    last_error = str(exc)
+            try:
+                app.Clear(1)
             except Exception:
                 pass
+            if Path(dest).exists():
+                return True
+            last_error = last_error or f"{progid}: PDF 파일이 생성되지 않았습니다."
+        except Exception as exc:
+            last_error = f"{progid}: {exc}"
+        finally:
+            if app is not None:
+                try:
+                    app.Quit()
+                except Exception:
+                    pass
+    _last_external_error = last_error or "한글 COM 연결에 실패했습니다."
+    return False
 
 
 def _xml_text(path, inner_path, paragraph_tag, text_tag):
