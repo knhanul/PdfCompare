@@ -722,24 +722,18 @@ class PDFViewer(QScrollArea):
                 painter.setPen(QPen(accent, 2))
                 painter.setBrush(fill)
                 painter.drawRoundedRect(rect, 4, 4)
-                # 번호 배지: 박스 바깥에 두어 본문과 겹치지 않게 한다.
+                # 번호 배지: 페이지 왼쪽 여백에 두어 이어지는 본문과 겹치지 않게 한다.
                 badge_w = 18 if len(number) == 1 else 24
                 badge_h = 16
-                gap = 3
-                img_w = painter.device().width() if painter.device() else rect.right() + badge_w
                 img_h = painter.device().height() if painter.device() else rect.bottom() + badge_h
-                # 1순위: 박스 위쪽 바깥
-                bx, by = rect.x(), rect.y() - badge_h - gap
-                if by < 0:
-                    # 2순위: 박스 왼쪽 바깥
-                    bx, by = rect.x() - badge_w - gap, rect.y()
-                if bx < 0:
-                    # 3순위: 박스 오른쪽 바깥
-                    bx, by = rect.right() + gap, rect.y()
-                if bx + badge_w > img_w:
-                    # 마지막: 박스 안 좌상단 (공간 없을 때만)
-                    bx, by = rect.x() + 2, rect.y() + 2
+                bx = 6
+                by = rect.y()
+                if by + badge_h > img_h:
+                    by = max(0, img_h - badge_h - 2)
                 badge = QRect(int(bx), int(max(0, by)), badge_w, badge_h)
+                # 배지에서 영역 박스까지 얇은 연결선
+                painter.setPen(QPen(accent, 1))
+                painter.drawLine(badge.right(), badge.center().y(), rect.left(), rect.top() + 2)
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(badge_bg)
                 painter.drawRoundedRect(badge, 4, 4)
