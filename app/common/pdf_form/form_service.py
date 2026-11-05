@@ -518,6 +518,13 @@ class FormDocumentSession:
             allow_duplicate_name=True,
         )
 
+
+    def _force_clear_widget_border(self, xref: int) -> None:
+        """widget.update()가 다시 채운 /BS·/Border·/MK 테두리를 xref에서 강제 제거한다."""
+        self.doc.xref_set_key(xref, "BS", "<</W 0 /S /S>>")
+        self.doc.xref_set_key(xref, "Border", "[0 0 0]")
+        self.doc.xref_set_key(xref, "MK", "<<>>")
+
     def add_field(
         self,
         page_index: int,
@@ -664,11 +671,13 @@ class FormDocumentSession:
                     pw.border_width = float(effective_border_width)
                 # PRINT 플래그는 annot 쪽에 이미 설정됨. appearance 갱신.
                 pw.update()
-                # update 후에도 BS/W가 되돌아가면 xref로 다시 고정
-                if field_type in ("text", "multiline", "date") or (
-                    field_type in ("checkbox", "radio") and float(effective_border_width) == 0.0
-                ):
-                    self.doc.xref_set_key(xref, "BS/W", "0")
+                # update()가 /BS·/MK·/AP 테두리를 다시 만들 수 있어, 직후 xref로 강제 무효화.
+                # (이 뒤에는 다시 update()를 호출하면 안 된다 — BS/W가 1로 복원됨.)
+                if field_type in ("text", "multiline", "date"):
+                    self._force_clear_widget_border(xref)
+                elif effective_fill is None and effective_border is None and float(effective_border_width) == 0.0:
+                    # 체크·라디오·콤보 등도 기본 투명이면 동일하게 테두리 제거
+                    self._force_clear_widget_border(xref)
                 break
 
         self._commit_current_doc(f"입력란 추가 ({w.field_label})")
@@ -800,6 +809,20 @@ class FormDocumentSession:
                 self.doc.xref_set_key(xref, "DV", fitz.get_pdf_str(dstr))
 
         target_w.update()
+
+        # update() 직후 텍스트 계열(또는 투명 배경 요청)은 xref로 테두리/배경 강제 제거.
+        effective_type = target_type or current.field_type
+        want_clear = False
+        if effective_type in ("text", "multiline", "date"):
+            want_clear = True
+        elif clear_fill_color or (
+            fill_color is None and border_color is None and border_width is not None and float(border_width) == 0.0
+        ):
+            want_clear = True
+        elif border_width is not None and float(border_width) == 0.0 and clear_fill_color:
+            want_clear = True
+        if want_clear:
+            self._force_clear_widget_border(xref)
 
         if current.field_type == "radio":
             opt_val = (radio_option.strip() if radio_option is not None else current.on_state) or "Yes"
@@ -1085,7 +1108,7 @@ def build_sample_form_pdf(dest_path: str | Path) -> Path:
             allow_duplicate_name=True,
         )
         session.add_field(
-            0, (275, 308, 295, 328),
+            0, (252, 308, 272, 328),
             field_type="radio",
             field_name="gender",
             field_label="성별",
