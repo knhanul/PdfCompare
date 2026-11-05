@@ -118,3 +118,149 @@ class WidgetInstance:
     @property
     def type_label(self) -> str:
         return FIELD_TYPE_LABELS.get(self.field_type, self.field_type)
+
+
+@dataclass
+class LogicalField:
+    field_name: str
+    field_label: str
+    field_type: str
+    value: object
+    default_value: str = ""
+    required: bool = False
+    read_only: bool = False
+    no_export: bool = False
+    is_password: bool = False
+    max_len: int = 0
+    choices: list[str] = field(default_factory=list)
+    radio_options: list[str] = field(default_factory=list)
+    widgets: list[WidgetInstance] = field(default_factory=list)
+    is_signed: bool | None = None
+
+    @property
+    def display_name(self) -> str:
+        return (self.field_label or "").strip() or self.field_name
+
+    @property
+    def type_label(self) -> str:
+        return FIELD_TYPE_LABELS.get(self.field_type, self.field_type)
+
+    @property
+    def pages(self) -> list[int]:
+        return sorted({w.page_index + 1 for w in self.widgets})
+
+    @property
+    def hierarchy_path(self) -> list[str]:
+        """점(.) 구분 필드명을 계층 경로로 해석한다. (예: applicant.name -> ['applicant', 'name'])"""
+        parts = [part.strip() for part in (self.field_name or "").split(".") if part.strip()]
+        return parts if len(parts) > 1 else []
+
+    @property
+    def parent_group(self) -> str:
+        """계층이 있으면 상위 그룹명, 없으면 빈 문자열."""
+        path = self.hierarchy_path
+        return path[0] if path else ""
+
+    @property
+    def leaf_name(self) -> str:
+        path = self.hierarchy_path
+        return path[-1] if path else self.field_name
+
+    @property
+    def is_shared_value(self) -> bool:
+        """동일 논리 필드가 여러 위치에 있는 경우 (라디오 제외)."""
+        return len(self.widgets) > 1 and self.field_type != "radio"
+
+    @property
+    def primary_page(self) -> int:
+        return self.pages[0] if self.pages else 1
+
+    @property
+    def primary_widget(self) -> WidgetInstance | None:
+        return self.widgets[0] if self.widgets else None
+
+    @property
+    def editable(self) -> bool:
+        return not self.read_only and self.field_type not in ("signature", "button")
+
+    def is_filled(self) -> bool:
+        """사용자가 값을 작성했는지 판정한다.
+        체크박스는 선택하지 않는 것(False)도 유효한 상태이나,
+        필수(required) 체크박스인 경우에는 체크(True)되어야 필수 항목 충족으로 본다.
+        """
+        if self.field_type == "checkbox":
+            if self.required:
+                return bool(self.value is True)
+            return True
+        if self.field_type == "radio":
+            val = str(self.value or "").strip()
+            return bool(val and val != "Off")
+        text = str(self.value if self.value is not None else "").strip()
+        return bool(text)
+
+    def validate_candidate_value(self, raw_value) -> tuple[bool, object, str]:
+        """외부/사용자 입력값이 이 논리 필드에 유효한지 검사한다.
+        반환: (성공여부, 정규화된 값, 오류 사유)
+        """
+        if self.field_type in ("signature", "button"):
+            return False, None, "지원하지 않는 필드 유형입니다."
+        if self.read_only:
+            return False, None, "읽기 전용 필드입니다."
+
+        if self.field_type == "checkbox":
+            on_state = self.primary_widget.on_state if self.primary_widget else "Yes"
+            ok, bval = normalize_bool_value(raw_value, on_state)
+            if not ok:
+                return False, None, f"체크박스 값 형식 오류: '{raw_value}'"
+            return True, bval, ""
+
+        if self.field_type == "radio":
+            text = str(raw_value if raw_value is not None else "").strip()
+            if not text or text.lower() in ("off", "false", "0", "미선택"):
+                return True, "", ""
+            if text in self.radio_options:
+                return True, text, ""
+            return False, None, f"라디오 선택 목록에 없는 값입니다 ({', '.join(self.radio_options)})"
+
+        if self.field_type in ("combobox", "listbox"):
+            text = str(raw_value if raw_value is not None else "").strip()
+            if not text:
+                return True, "", ""
+            if self.choices and text not in self.choices:
+                return False, None, f"선택 목록에 없는 값입니다 ({', '.join(self.choices)})"
+            return True, text, ""
+
+        text = str(raw_value if raw_value is not None else "")
+        if self.field_type != "multiline":
+            text = text.replace("\r\n", " ").replace("\n", " ").strip()
+        if self.max_len and self.max_len > 0 and len(text) > self.max_len:
+            return False, None, f"최대 글자 수({self.max_len}자)를 초과했습니다 ({len(text)}자)"
+        if self.field_type == "date":
+            ok, normalized = validate_date_string(text)
+            if not ok:
+                return False, None, normalized
+            return True, normalized, ""
+        return True, text, ""
+
+
+@dataclass
+class ImportCandidateItem:
+    source_key: str
+    raw_value: object
+    target_field_name: str | None
+    status: str  # matched, unmatched_data, read_only, unsupported_type, invalid_format, invalid_choice
+    normalized_value: object = None
+    reason: str = ""
+
+
+@dataclass
+class ImportAnalysis:
+    items: list[ImportCandidateItem] = field(default_factory=list)
+    missing_pdf_fields: list[str] = field(default_factory=list)
+
+    @property
+    def matched_items(self) -> list[ImportCandidateItem]:
+        return [item for item in self.items if item.status == "matched"]
+
+    def count_by_status(self, status: str) -> int:
+        return sum(1 for item in self.items if item.status == status)
