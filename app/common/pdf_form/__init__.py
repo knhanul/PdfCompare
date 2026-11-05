@@ -14,6 +14,7 @@ from app.common.pdf_form.field_models import (
 from app.common.pdf_form.form_service import (
     FormDocumentSession,
     ensure_sample_form_pdf,
+    flatten_form_pdf,
     get_sample_form_pdf_path,
 )
 from app.common.pdf_form.form_data_io import (
@@ -39,6 +40,7 @@ __all__ = [
     "analyze_import_data",
     "apply_import_analysis",
     "ensure_sample_form_pdf",
+    "flatten_form_pdf",
     "export_fields_to_csv",
     "export_fields_to_json",
     "export_template_csv",
