@@ -8,7 +8,7 @@ _KEY = 'viewer/last_session'
 
 
 def _settings():
-    return QSettings('PdfDiff', 'Workspace')
+    return QSettings('PdfCompare', 'Workspace')
 
 
 def save_session(entries):

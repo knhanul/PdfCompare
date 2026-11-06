@@ -1,4 +1,4 @@
-# PdfDiff
+# PdfCompare
 
 PyQt6 기반의 Windows 데스크톱 문서 유틸리티 애플리케이션입니다. PDF 비교 기능을 하나의 통합된 UI에서 제공합니다. 동일한 코드베이스에서 빌드 타겟(`posid`, `post`, `nuni`)에 따라 앱 이름/아이콘/테마 색상을 분리하여 배포할 수 있습니다.
 
@@ -58,7 +58,7 @@ PyQt6 기반의 Windows 데스크톱 문서 유틸리티 애플리케이션입�
 ## 프로젝트 구조
 
 ```
-PdfDiff/
+PdfCompare/
 ├── main.py                      # 엔트리포인트
 ├── build.py                     # PyInstaller 빌드 스크립트
 ├── requirements.txt             # 의존성 목록
@@ -156,16 +156,16 @@ python build.py --target posid --version 2.0.1 --release-date 2026-08-20
 ### 빌드 과정
 1. `app/common/build_version.txt`에 버전/출시일/빌드 타겟 기록
 2. 환경변수 `BUILD_TARGET`, `APP_VERSION`, `PDF_COMPARE_RELEASE_DATE` 설정
-3. PyInstaller로 `main.py`를 엔트리포인트로 `PDFDiff.exe` 생성 (모든 타겟 동일 파일명)
+3. PyInstaller로 `main.py`를 엔트리포인트로 `PDFCompare.exe` 생성 (모든 타겟 동일 파일명)
    - `--windowed` (콘솔 창 없음)
    - 타겟 아이콘 적용 (`assets/<target>/<target>_icon.ico`)
    - `assets/`, `assets/<target>/`, `app/common/build_version.txt` 번들링
    - `configs.*`, `app.tools.*` 모듈을 hidden-import로 명시
 
 ### 결과물
-- `dist/PDFDiff/PDFDiff.exe` — 실행 파일
+- `dist/PDFCompare/PDFCompare.exe` — 실행 파일
 - `build/` — 중간 산출물
-- `PDFDiff.spec` — PyInstaller 스펙 파일 (자동 생성)
+- `PDFCompare.spec` — PyInstaller 스펙 파일 (자동 생성)
 
 ### 빌드 시 주의사항
 - 빌드 로그에 `Processing standard module hook 'hook-PyQt6.py' ...` 라인이 나타나야 PyQt6가 정상 번들링된 것입니다. 해당 라인이 없다면 venv에 PyQt6가 설치되지 않은 것입니다.

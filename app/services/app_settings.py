@@ -19,7 +19,7 @@ _INT = {k for k, v in DEFAULTS.items() if isinstance(v, int) and not isinstance(
 
 
 def _settings():
-    return QSettings('PdfDiff', 'Workspace')
+    return QSettings('PdfCompare', 'Workspace')
 
 
 def get(key):

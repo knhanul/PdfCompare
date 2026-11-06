@@ -7,17 +7,17 @@ from pathlib import Path
 
 TARGETS = {
     'posid': {
-        'app_name': 'PDFDiff',
+        'app_name': 'PDFCompare',
         'asset_dir': 'assets/posid',
         'icon': 'assets/posid/posid_icon.ico',
     },
     'post': {
-        'app_name': 'PDFDiff',
+        'app_name': 'PDFCompare',
         'asset_dir': 'assets/post',
         'icon': 'assets/post/post_icon.ico',
     },
     'nuni': {
-        'app_name': 'PDFDiff',
+        'app_name': 'PDFCompare',
         'asset_dir': 'assets/nuni',
         'icon': 'assets/nuni/nuni_icon.ico',
     },

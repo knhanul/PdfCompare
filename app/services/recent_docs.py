@@ -8,7 +8,7 @@ MAX_RECENT = 12
 
 
 def _settings():
-    return QSettings('PdfDiff', 'Workspace')
+    return QSettings('PdfCompare', 'Workspace')
 
 
 def load_recent():

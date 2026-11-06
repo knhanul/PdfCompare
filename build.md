@@ -70,7 +70,7 @@ python build.py --target nuni --version 1.0.0 --release-date 2026-09-23
 python build.py --target posid --version 2.0.1 --release-date 2026-09-23
 ```
 
-- `dist/PDFDiff/` 폴더 전체 배포
+- `dist/PDFCompare/` 폴더 전체 배포
 - 실행 파일과 종속 파일이 분리되어 있어 **시작 속도가 빠름**
 - 업데이트 시 일부 파일만 교체 가능
 
@@ -80,7 +80,7 @@ python build.py --target posid --version 2.0.1 --release-date 2026-09-23
 python build.py --target posid --version 2.0.1 --release-date 2026-09-23 --onefile
 ```
 
-- `dist/PDFDiff.exe` 단일 파일 배포
+- `dist/PDFCompare.exe` 단일 파일 배포
 - 모든 종속성이 하나의 exe에 압축되어 **배포가 간편** (단일 파일 복사만으로 실행)
 - **시작 속도가 상대적으로 느림** (실행 시 임시 폴더에 압축 해제)
 - 실행 파일 크기가 큼 (모든 리소스 포함)
@@ -93,7 +93,7 @@ python build.py --target posid --version 2.0.1 --release-date 2026-09-23 --onefi
 
 1. **버전 파일 생성** — `app/common/build_version.txt`에 `APP_VERSION`, `PDF_COMPARE_RELEASE_DATE` 기록
 2. **환경변수 설정** — `BUILD_TARGET`, `APP_VERSION`, `PDF_COMPARE_RELEASE_DATE`
-3. **PyInstaller 실행** — `main.py`를 엔트리포인트로 `PDFDiff.exe` 생성
+3. **PyInstaller 실행** — `main.py`를 엔트리포인트로 `PDFCompare.exe` 생성
    - `--windowed` (콘솔 창 없음)
    - 타겟 아이콘 적용 (`assets/<target>/<target>_icon.ico`)
    - `--add-data`로 `assets/`, `assets/<target>/`, `app/common/build_version.txt` 번들링
@@ -107,22 +107,22 @@ python build.py --target posid --version 2.0.1 --release-date 2026-09-23 --onefi
 
 | 경로 | 설명 |
 | --- | --- |
-| `dist/PDFDiff/PDFDiff.exe` | 실행 파일 |
-| `dist/PDFDiff/` | 종속 파일들 (DLL, 데이터 등) |
+| `dist/PDFCompare/PDFCompare.exe` | 실행 파일 |
+| `dist/PDFCompare/` | 종속 파일들 (DLL, 데이터 등) |
 | `build/` | 중간 빌드 산출물 (삭제 가능) |
-| `PDFDiff.spec` | PyInstaller 스펙 파일 (자동 생성) |
+| `PDFCompare.spec` | PyInstaller 스펙 파일 (자동 생성) |
 
-`dist/PDFDiff/` 폴더 전체를 배포하면 됩니다.
+`dist/PDFCompare/` 폴더 전체를 배포하면 됩니다.
 
 ### 원파일 모드 (`--onefile`)
 
 | 경로 | 설명 |
 | --- | --- |
-| `dist/PDFDiff.exe` | 단일 실행 파일 (모든 종속성 포함) |
+| `dist/PDFCompare.exe` | 단일 실행 파일 (모든 종속성 포함) |
 | `build/` | 중간 빌드 산출물 (삭제 가능) |
-| `PDFDiff.spec` | PyInstaller 스펙 파일 (자동 생성) |
+| `PDFCompare.spec` | PyInstaller 스펙 파일 (자동 생성) |
 
-`dist/PDFDiff.exe` 파일 하나만 배포하면 됩니다.
+`dist/PDFCompare.exe` 파일 하나만 배포하면 됩니다.
 
 ## 빌드 시 주의사항
 
@@ -139,7 +139,7 @@ INFO: Processing standard module hook 'hook-PyQt6.py' ...
 ### PermissionError 발생 시
 
 ```
-PermissionError: [WinError 5] 액세스가 거부되었습니다: 'C:\Pjt\DeskUtil\dist\PDFDiff'
+PermissionError: [WinError 5] 액세스가 거부되었습니다: 'C:\Pjt\DeskUtil\dist\PDFCompare'
 ```
 
 이전 버전의 실행 파일이 실행 중이어서 `dist/` 디렉터리를 삭제하지 못한 경우입니다. 실행 중인 앱을 모두 종료한 후 다시 빌드하세요.
