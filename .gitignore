@@ -162,3 +162,6 @@ $RECYCLE.BIN/
 # Local configuration
 config.local.py
 settings.local.py
+
+# Local sample assets
+*저장.pdf
