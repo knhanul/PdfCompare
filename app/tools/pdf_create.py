@@ -16,6 +16,8 @@ from PyQt6.QtWidgets import (
 from app.common.pdf_convert import SUPPORTED_EXTS, is_supported
 from app.common.pdf_convert_worker import ConvertThreadManager
 from app.common.pdf_images import collect_images, extract_pdf_text, save_image
+from app.services import app_settings
+from app.shell.theme import header_section_qss
 from app.common.styles import COLOR_BORDER, COLOR_PRIMARY, MODERN_QSS
 from app.common.loading_dialog import note_progress, style_task_progress
 from app.common.user_prefs import load_dir, save_dir
@@ -242,6 +244,7 @@ class PdfCreateWidget(QWidget):
         self._create_bottom_bar(root)
 
     def _style_file_table(self):
+        header = header_section_qss(app_settings.get('ui/theme'))
         self.file_table.setStyleSheet(f"""
             QTableWidget {{
                 background: white;
@@ -252,15 +255,7 @@ class PdfCreateWidget(QWidget):
                 border: none;
                 padding: 2px 4px;
             }}
-            QHeaderView::section {{
-                background-color: #C2410C;
-                color: #FFFFFF;
-                font-weight: 600;
-                border: none;
-                border-right: 1px solid rgba(255, 255, 255, 0.25);
-                border-bottom: 2px solid #7A2B1C;
-                padding: 6px 8px;
-            }}
+            {header}
             QCheckBox::indicator {{
                 width: 18px;
                 height: 18px;

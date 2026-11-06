@@ -14,6 +14,8 @@ from PyQt6.QtWidgets import (
     QFileIconProvider,
 )
 
+from app.services import app_settings
+from app.shell.theme import header_section_qss
 from app.common.styles import (
     COLOR_BORDER, COLOR_PRIMARY, COLOR_TEXT_PRIMARY, MODERN_QSS,
 )
@@ -350,6 +352,7 @@ class PdfEditorWidget(QWidget):
             self._load_files(paths)
 
     def _style_file_table(self):
+        header = header_section_qss(app_settings.get('ui/theme'))
         self.file_table.setStyleSheet(f"""
             QTableWidget {{
                 background: white;
@@ -364,15 +367,7 @@ class PdfEditorWidget(QWidget):
                 background-color: #FFF8F2;
                 color: {COLOR_TEXT_PRIMARY};
             }}
-            QHeaderView::section {{
-                background-color: #C2410C;
-                color: #FFFFFF;
-                font-weight: 600;
-                border: none;
-                border-right: 1px solid rgba(255, 255, 255, 0.25);
-                border-bottom: 2px solid #7A2B1C;
-                padding: 6px 8px;
-            }}
+            {header}
             QCheckBox::indicator {{
                 width: 18px;
                 height: 18px;

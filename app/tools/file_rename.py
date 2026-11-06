@@ -15,6 +15,8 @@ from PyQt6.QtWidgets import (
 
 from app.common.file_names import build_new_name, direct_name, unique_name
 from app.common.loading_dialog import note_progress, style_task_progress
+from app.services import app_settings
+from app.shell.theme import header_section_qss
 from app.common.styles import COLOR_BORDER, COLOR_PRIMARY, COLOR_TEXT_MUTED, COLOR_TEXT_PRIMARY, MODERN_QSS
 from app.common.user_prefs import load_dir, save_dir
 
@@ -377,6 +379,7 @@ class FileRenameWidget(QWidget):
             widget.setEnabled(checked)
 
     def _style_table(self):
+        header = header_section_qss(app_settings.get('ui/theme'))
         self.file_table.setStyleSheet(f"""
             QTableWidget {{
                 background: white;
@@ -385,15 +388,7 @@ class FileRenameWidget(QWidget):
                 selection-background-color: transparent;
                 selection-color: {COLOR_TEXT_PRIMARY};
             }}
-            QHeaderView::section {{
-                background-color: #C2410C;
-                color: #FFFFFF;
-                font-weight: 600;
-                border: none;
-                border-right: 1px solid rgba(255, 255, 255, 0.25);
-                border-bottom: 2px solid #7A2B1C;
-                padding: 6px 8px;
-            }}
+            {header}
             QCheckBox::indicator {{
                 width: 18px; height: 18px; border: 1.5px solid #C6C6C8; border-radius: 5px; background: white;
             }}

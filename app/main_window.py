@@ -13,7 +13,7 @@ from app.common.styles import COLOR_PRIMARY, MODERN_QSS
 from app.common.comparison_settings import ComparisonSettings
 from app.services import app_settings, recent_docs, workspace_session
 from app.shell.theme import build_shell_qss, theme_tokens
-from app.shell.sidebar_icons import brand_mark, line_icon
+from app.shell.sidebar_icons import brand_mark, line_icon, official_brand_pixmap
 from app.shell.viewer_workspace import ViewerWorkspace
 from app.shell.welcome_page import WelcomePage
 from app.viewer.document_manager import DocumentManager
@@ -101,7 +101,8 @@ class MdiMainWindow(QMainWindow):
         logo_layout.setSpacing(10)
         self.sidebar_logo = QLabel()
         self.sidebar_logo.setObjectName('sidebarBrandMark')
-        self.sidebar_logo.setFixedSize(28, 28)
+        self.sidebar_logo.setFixedSize(32, 32)
+        self.sidebar_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._refresh_brand_mark()
         brand_text = QVBoxLayout()
         brand_text.setSpacing(0)
@@ -159,7 +160,16 @@ class MdiMainWindow(QMainWindow):
             return theme_tokens('default')
 
     def _refresh_brand_mark(self):
-        self.sidebar_logo.setPixmap(brand_mark(self._sidebar_tokens()['accent'], 28))
+        theme_id = 'default'
+        try:
+            theme_id = app_settings.get('ui/theme') or 'default'
+        except Exception:
+            pass
+        # Official 기관문양 — do not recolor; light pad only on black chrome.
+        pm = official_brand_pixmap(32, light_pad=(theme_id == 'black'))
+        if pm is None or pm.isNull():
+            pm = brand_mark(self._sidebar_tokens()['accent'], 32)
+        self.sidebar_logo.setPixmap(pm)
 
     def refresh_sidebar_icons(self):
         tokens = self._sidebar_tokens()
@@ -435,7 +445,7 @@ class MdiMainWindow(QMainWindow):
             self._position_focus_button()
 
     def apply_sidebar_collapsed_state(self, collapsed):
-        # Quiet Brand: the 28px mark stays; only the title block collapses.
+        # Quiet Brand: the official mark stays; only the title block collapses.
         self.sidebar_brand_title.setVisible(not collapsed)
         self.sidebar_brand_subtitle.setVisible(not collapsed)
         self.tools_group_label.setVisible(not collapsed)
@@ -748,6 +758,9 @@ class MdiMainWindow(QMainWindow):
             self.setStyleSheet(MODERN_QSS + build_shell_qss(app_settings.get('ui/theme')))
             # Local blink styles otherwise win over the new palette.
             self.legend_caution_btn.setStyleSheet('')
+            self._refresh_brand_mark()
+            self.refresh_sidebar_icons()
+            self._refresh_tool_table_themes()
         self.tool_cache_max = max(1, app_settings.get('perf/tool_cache_max'))
         self.viewer.default_fit = app_settings.get('viewer/default_zoom')
         self.viewer.nav_default_visible = app_settings.get('viewer/show_nav')
@@ -761,6 +774,19 @@ class MdiMainWindow(QMainWindow):
             self.update_sidebar_compact()
         if key == 'perf/tool_cache_max':
             self._evict_tools(keep=self.current_tool_key)
+
+
+    def _refresh_tool_table_themes(self):
+        """Re-apply tool table header colors when the shell theme changes."""
+        widgets = list(self.tool_cache.values())
+        if self.current_tool_widget is not None and self.current_tool_widget not in widgets:
+            widgets.append(self.current_tool_widget)
+        for widget in widgets:
+            for name in ('_style_file_table', '_style_table'):
+                fn = getattr(widget, name, None)
+                if callable(fn):
+                    fn()
+                    break
 
     def show_settings(self):
         if self.settings_page is None:

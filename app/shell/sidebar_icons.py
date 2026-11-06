@@ -118,3 +118,34 @@ def brand_mark(color='#A44735', size=28):
     p.end()
     pm.setDevicePixelRatio(scale)
     return pm
+
+
+def official_brand_pixmap(size=32, light_pad=False):
+    """Official 기관문양 from assets; never recolor. Optional light pad for dark chrome."""
+    from app.common.resources import get_logo_path
+    path = get_logo_path()
+    if not path:
+        return None
+    src = QPixmap(path)
+    if src.isNull():
+        return None
+    margin = 3 if light_pad else 0
+    inner = max(8, size - 2 * margin)
+    scaled = src.scaled(
+        inner, inner,
+        Qt.AspectRatioMode.KeepAspectRatio,
+        Qt.TransformationMode.SmoothTransformation,
+    )
+    out = QPixmap(size, size)
+    out.fill(Qt.GlobalColor.transparent)
+    p = QPainter(out)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    if light_pad:
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor('#FFFFFF'))
+        p.drawRoundedRect(QRectF(0, 0, size, size), 6, 6)
+    x = (size - scaled.width()) // 2
+    y = (size - scaled.height()) // 2
+    p.drawPixmap(x, y, scaled)
+    p.end()
+    return out

@@ -157,7 +157,25 @@ QCheckBox::indicator:checked, QRadioButton::indicator:checked {{ background: {ac
 QToolTip {{ background: {panel_bg}; color: {text}; border: 1px solid {border}; }}
 QScrollBar::handle:vertical, QScrollBar::handle:horizontal {{ background: {text_muted}; }}
 QSplitter::handle {{ background: {border}; }}
+QHeaderView::section {{
+    background-color: {accent}; color: {on_accent}; font-weight: 600; border: none;
+    border-right: 1px solid {accent_hover}; border-bottom: 2px solid {accent_hover}; padding: 6px 8px;
+}}
 """
+
+
+def header_section_qss(theme_id='default'):
+    """QHeaderView::section colors for the active shell theme (tool tables)."""
+    tokens = theme_tokens(theme_id)
+    on_accent = '#202124' if theme_id in ('energy', 'black') else '#FFFFFF'
+    return (
+        'QHeaderView::section {'
+        f" background-color: {tokens['accent']}; color: {on_accent}; font-weight: 600;"
+        ' border: none;'
+        f" border-right: 1px solid {tokens['accent_hover']};"
+        f" border-bottom: 2px solid {tokens['accent_hover']};"
+        ' padding: 6px 8px; }'
+    )
 
 
 def build_shell_qss(theme_id='default'):
