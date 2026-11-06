@@ -119,8 +119,8 @@ class MdiMainWindow(QMainWindow):
 
         self.view_button_host = QVBoxLayout()
         self.view_button_host.setSpacing(6)
-        for key, title, icon in (('home', '홈', '🏠'), ('viewer', 'PDF 보기', '📖'), ('split', '두 PDF 동시 보기', '◫')):
-            btn = QPushButton(title)
+        for key, title, icon in (('home', '홈', '🏠'), ('viewer', 'PDF 보기', '📄'), ('split', '두 PDF 동시 보기', '⧉')):
+            btn = QPushButton(f'{icon}  {title}')
             btn.setObjectName('sidebarBtn')
             btn.setProperty('active', False)
             btn.setProperty('nav_icon', icon)
@@ -136,7 +136,7 @@ class MdiMainWindow(QMainWindow):
         self.sidebar_button_host.setSpacing(6)
         sidebar_layout.addLayout(self.sidebar_button_host)
         sidebar_layout.addStretch()
-        btn = QPushButton('설정')
+        btn = QPushButton('⚙  설정')
         btn.setObjectName('sidebarBtn')
         btn.setProperty('active', False)
         btn.setProperty('nav_icon', '⚙')
@@ -428,21 +428,28 @@ class MdiMainWindow(QMainWindow):
         self.tools_group_label.setVisible(not collapsed)
         for button in self.nav_buttons.values():
             button.setProperty('collapsed', collapsed)
-            button.setText(button.property('nav_icon') if collapsed else button.property('nav_title'))
-            button.setToolTip(button.property('nav_title') if collapsed else '')
+            icon = button.property('nav_icon') or ''
+            title = button.property('nav_title') or ''
+            if collapsed:
+                button.setText(icon)
+                button.setToolTip(title)
+            else:
+                button.setText(f'{icon}  {title}' if icon else title)
+                button.setToolTip('')
             button.style().unpolish(button)
             button.style().polish(button)
         for tool_definition, button in zip(self.tool_definitions, self.sidebar_buttons):
             button.setProperty('collapsed', collapsed)
+            icon = tool_definition.get('icon', '📄')
+            title = tool_definition['menu_title']
             if collapsed:
-                # Use icon property for collapsed state
-                icon = tool_definition.get('icon', '📄')
                 button.setText(icon)
-                button.setToolTip(tool_definition['menu_title'])
+                button.setToolTip(title)
                 button.setMinimumHeight(40 if self.sidebar_compact else 50)
                 button.setMaximumHeight(40 if self.sidebar_compact else 50)
             else:
-                button.setText(tool_definition['menu_title'])
+                button.setText(f'{icon}  {title}')
+                button.setToolTip('')
                 button.setMinimumHeight(0)
                 button.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX
             button.style().unpolish(button)
@@ -456,10 +463,14 @@ class MdiMainWindow(QMainWindow):
                 widget.deleteLater()
         self.sidebar_buttons = []
         for tool_definition in self.tool_definitions:
-            button = QPushButton(tool_definition['menu_title'])
+            icon = tool_definition.get('icon', '📄')
+            title = tool_definition['menu_title']
+            button = QPushButton(f'{icon}  {title}')
             button.setObjectName('sidebarBtn')
             button.setEnabled(tool_definition['enabled'])
             button.setProperty('active', False)
+            button.setProperty('nav_icon', icon)
+            button.setProperty('nav_title', title)
             if tool_definition['enabled']:
                 button.clicked.connect(partial(self.open_tool, tool_definition['key']))
             self.sidebar_button_host.addWidget(button)
@@ -506,7 +517,7 @@ class MdiMainWindow(QMainWindow):
                 'class_name': 'PdfCompareWidget',
                 'singleton': True,
                 'enabled': True,
-                'icon': '📄',
+                'icon': '🔍',
             },
             {
                 'key': 'pdf_hf_compare',
@@ -516,7 +527,7 @@ class MdiMainWindow(QMainWindow):
                 'class_name': 'HFCompareWidget',
                 'singleton': True,
                 'enabled': True,
-                'icon': '📄',
+                'icon': '📑',
             },
             {
                 'key': 'pdf_editor',

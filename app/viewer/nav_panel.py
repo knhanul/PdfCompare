@@ -6,6 +6,17 @@ from PyQt6.QtWidgets import QListView, QListWidget, QListWidgetItem
 from app.viewer.render_service import render_service
 
 THUMB_ZOOM = 0.2
+ICON_W, ICON_H = 110, 146
+GRID_W, GRID_H = 140, 180
+
+
+def _scaled_icon(img):
+    pix = QPixmap.fromImage(img) if not isinstance(img, QPixmap) else img
+    return QIcon(pix.scaled(
+        ICON_W, ICON_H,
+        Qt.AspectRatioMode.KeepAspectRatio,
+        Qt.TransformationMode.SmoothTransformation,
+    ))
 
 
 class NavPanel(QListWidget):
@@ -18,9 +29,12 @@ class NavPanel(QListWidget):
         self.setFlow(QListView.Flow.TopToBottom)
         self.setWrapping(False)
         self.setMovement(QListView.Movement.Static)
-        self.setIconSize(QSize(120, 160))
+        self.setResizeMode(QListView.ResizeMode.Fixed)
+        self.setUniformItemSizes(True)
+        self.setIconSize(QSize(ICON_W, ICON_H))
+        self.setGridSize(QSize(GRID_W, GRID_H))
         self.setSpacing(6)
-        self.setFixedWidth(168)
+        self.setFixedWidth(156)
         self.doc = None
         self._svc = render_service()
         self._svc.rendered.connect(self._on_rendered)
@@ -32,11 +46,13 @@ class NavPanel(QListWidget):
         self.doc = doc
         if not doc:
             return
-        blank = QPixmap(90, 120)
+        blank = QPixmap(ICON_W, ICON_H)
         blank.fill(Qt.GlobalColor.white)
+        icon = QIcon(blank)
         for i in range(doc.page_count):
-            it = QListWidgetItem(QIcon(blank), str(i + 1))
+            it = QListWidgetItem(icon, str(i + 1))
             it.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
+            it.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
             self.addItem(it)
         self._request_visible()
 
@@ -50,20 +66,22 @@ class NavPanel(QListWidget):
     def _request_visible(self, *_):
         if not self.doc or not self.isVisible():
             return
+        vp = self.viewport().rect()
         for i in range(self.count()):
             it = self.item(i)
-            if not self.visualItemRect(it).intersects(self.viewport().rect()):
+            if not self.visualItemRect(it).intersects(vp):
                 continue
             img = self._svc.get(self.doc.path, i, THUMB_ZOOM)
             if img is not None:
-                it.setIcon(QIcon(QPixmap.fromImage(img)))
+                it.setIcon(_scaled_icon(img))
 
     def _on_rendered(self, key):
-        if self.doc and key[0] == self.doc.path and key[2] == int(THUMB_ZOOM * 1000):
-            img = self._svc.cache.get(key)
-            it = self.item(key[1])
-            if img is not None and it is not None:
-                it.setIcon(QIcon(QPixmap.fromImage(img)))
+        if not self.doc or key[0] != self.doc.path or key[2] != int(THUMB_ZOOM * 1000):
+            return
+        img = self._svc.cache.get(key)
+        it = self.item(key[1])
+        if img is not None and it is not None:
+            it.setIcon(_scaled_icon(img))
 
     def showEvent(self, e):
         super().showEvent(e)

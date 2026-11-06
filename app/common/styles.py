@@ -94,12 +94,13 @@ QLabel#sidebarBrandSubtitle {{
 QPushButton#sidebarBtn {{
     background-color: transparent;
     border: none;
-    border-radius: 12px;
-    padding: 12px 16px;
+    border-radius: 10px;
+    padding: 10px 14px;
     color: {_SIDEBAR_TEXT};
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
     text-align: left;
+    min-height: 20px;
 }}
 
 QPushButton#sidebarBtn[collapsed='true'] {{
@@ -117,6 +118,39 @@ QPushButton#sidebarBtn:hover {{
 QPushButton#sidebarBtn[active='true'] {{
     background-color: {_SIDEBAR_ACTIVE_BG};
     color: #FFFFFF;
+}}
+
+QLabel#sidebarGroupLabel {{
+    color: {COLOR_TEXT_MUTED};
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    padding: 10px 8px 4px 8px;
+}}
+
+QListWidget#navPanel {{
+    background-color: #F7F5F3;
+    border: none;
+    border-right: 1px solid {_SIDEBAR_BORDER};
+    outline: none;
+    padding: 8px 0;
+}}
+
+QListWidget#navPanel::item {{
+    color: {_SIDEBAR_TEXT};
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 4px;
+    margin: 2px 6px;
+}}
+
+QListWidget#navPanel::item:selected {{
+    background-color: {_PRIMARY_LIGHT};
+    border: 1px solid {_PRIMARY};
+}}
+
+QListWidget#navPanel::item:hover {{
+    background-color: {_SIDEBAR_HOVER};
 }}
 
 /* ── Header Bar ── */
