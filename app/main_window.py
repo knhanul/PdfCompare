@@ -13,6 +13,7 @@ from app.common.styles import COLOR_PRIMARY, MODERN_QSS
 from app.common.comparison_settings import ComparisonSettings
 from app.services import app_settings, recent_docs, workspace_session
 from app.shell.theme import build_shell_qss, theme_tokens
+from app.shell.sidebar_icons import brand_mark, line_icon
 from app.shell.viewer_workspace import ViewerWorkspace
 from app.shell.welcome_page import WelcomePage
 from app.viewer.document_manager import DocumentManager
@@ -95,31 +96,30 @@ class MdiMainWindow(QMainWindow):
 
         logo_card = QFrame()
         logo_card.setObjectName('sidebarLogoCard')
-        logo_layout = QVBoxLayout(logo_card)
-        logo_layout.setContentsMargins(12, 12, 12, 12)
-        logo_layout.setSpacing(6)
+        logo_layout = QHBoxLayout(logo_card)
+        logo_layout.setContentsMargins(6, 2, 6, 10)
+        logo_layout.setSpacing(10)
         self.sidebar_logo = QLabel()
-        self.sidebar_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo_path = get_logo_path()
-        if logo_path:
-            self.sidebar_logo.setPixmap(QPixmap(logo_path).scaled(144, 64, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        self.sidebar_logo.setObjectName('sidebarBrandMark')
+        self.sidebar_logo.setFixedSize(28, 28)
+        self._refresh_brand_mark()
+        brand_text = QVBoxLayout()
+        brand_text.setSpacing(0)
         self.sidebar_brand_title = QLabel(APP_NAME)
         self.sidebar_brand_title.setObjectName('sidebarBrandTitle')
-        self.sidebar_brand_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.sidebar_brand_subtitle = QLabel(COMPANY_NAME)
         self.sidebar_brand_subtitle.setObjectName('sidebarBrandSubtitle')
-        self.sidebar_brand_subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # 회사명 문구는 헤더/정보 팝업에서만 표시하고 사이드바 로고 하단에는 미표시
-        self.sidebar_brand_subtitle.setVisible(False)
+        brand_text.addWidget(self.sidebar_brand_title)
+        brand_text.addWidget(self.sidebar_brand_subtitle)
         logo_layout.addWidget(self.sidebar_logo)
-        logo_layout.addWidget(self.sidebar_brand_title)
-        logo_layout.addWidget(self.sidebar_brand_subtitle)
+        logo_layout.addLayout(brand_text, 1)
         sidebar_layout.addWidget(logo_card)
 
         self.view_button_host = QVBoxLayout()
-        self.view_button_host.setSpacing(6)
-        for key, title, icon in (('home', '홈', '🏠'), ('viewer', 'PDF 보기', '📄'), ('split', '두 PDF 동시 보기', '⧉')):
-            btn = QPushButton(f'{icon}  {title}')
+        self.view_button_host.setSpacing(2)
+        for key, title in (('home', '홈'), ('viewer', 'PDF 보기'), ('split', '두 PDF 동시 보기')):
+            icon = key
+            btn = QPushButton(title)
             btn.setObjectName('sidebarBtn')
             btn.setProperty('active', False)
             btn.setProperty('nav_icon', icon)
@@ -132,19 +132,43 @@ class MdiMainWindow(QMainWindow):
         self.tools_group_label.setObjectName('sidebarGroupLabel')
         sidebar_layout.addWidget(self.tools_group_label)
         self.sidebar_button_host = QVBoxLayout()
-        self.sidebar_button_host.setSpacing(6)
+        self.sidebar_button_host.setSpacing(2)
         sidebar_layout.addLayout(self.sidebar_button_host)
         sidebar_layout.addStretch()
-        btn = QPushButton('⚙  설정')
+        footer = QFrame()
+        footer.setObjectName('sidebarFooter')
+        footer_layout = QVBoxLayout(footer)
+        footer_layout.setContentsMargins(0, 8, 0, 0)
+        btn = QPushButton('설정')
         btn.setObjectName('sidebarBtn')
         btn.setProperty('active', False)
-        btn.setProperty('nav_icon', '⚙')
+        btn.setProperty('nav_icon', 'settings')
         btn.setProperty('nav_title', '설정')
         btn.setToolTip('설정 및 작업 공간 관리 (Ctrl+,)')
         btn.clicked.connect(partial(self.activate_view, 'settings'))
-        sidebar_layout.addWidget(btn)
+        footer_layout.addWidget(btn)
+        sidebar_layout.addWidget(footer)
         self.nav_buttons['settings'] = btn
         return sidebar
+
+    # ---- Quiet Brand line icons ------------------------------------------------
+    def _sidebar_tokens(self):
+        try:
+            return theme_tokens(app_settings.get('ui/theme'))
+        except Exception:
+            return theme_tokens('default')
+
+    def _refresh_brand_mark(self):
+        self.sidebar_logo.setPixmap(brand_mark(self._sidebar_tokens()['accent'], 28))
+
+    def refresh_sidebar_icons(self):
+        tokens = self._sidebar_tokens()
+        pairs = [(b.property('nav_icon'), b) for b in self.nav_buttons.values()]
+        pairs += [(d['key'], b) for d, b in zip(self.tool_definitions, self.sidebar_buttons)]
+        for key, b in pairs:
+            color = tokens['accent'] if b.property('active') else tokens['sidebar_icon']
+            b.setIcon(line_icon(key, color, 18))
+            b.setIconSize(QSize(18, 18))
 
     def create_right_panel(self):
         right_panel = QWidget()
@@ -411,30 +435,19 @@ class MdiMainWindow(QMainWindow):
             self._position_focus_button()
 
     def apply_sidebar_collapsed_state(self, collapsed):
-        if collapsed:
-            # Show small logo only
-            self.sidebar_brand_title.setVisible(False)
-            self.sidebar_brand_subtitle.setVisible(False)
-            logo_path = get_logo_path()
-            if logo_path:
-                self.sidebar_logo.setPixmap(QPixmap(logo_path).scaled(40, 18, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-        else:
-            # Show full logo card
-            self.sidebar_brand_title.setVisible(True)
-            self.sidebar_brand_subtitle.setVisible(False)
-            logo_path = get_logo_path()
-            if logo_path:
-                self.sidebar_logo.setPixmap(QPixmap(logo_path).scaled(144, 64, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        # Quiet Brand: the 28px mark stays; only the title block collapses.
+        self.sidebar_brand_title.setVisible(not collapsed)
+        self.sidebar_brand_subtitle.setVisible(not collapsed)
         self.tools_group_label.setVisible(not collapsed)
         for button in self.nav_buttons.values():
             button.setProperty('collapsed', collapsed)
             icon = button.property('nav_icon') or ''
             title = button.property('nav_title') or ''
             if collapsed:
-                button.setText(icon)
+                button.setText('')
                 button.setToolTip(title)
             else:
-                button.setText(f'{icon}  {title}' if icon else title)
+                button.setText(title)
                 button.setToolTip('')
             button.style().unpolish(button)
             button.style().polish(button)
@@ -443,17 +456,18 @@ class MdiMainWindow(QMainWindow):
             icon = tool_definition.get('icon', '📄')
             title = tool_definition['menu_title']
             if collapsed:
-                button.setText(icon)
+                button.setText('')
                 button.setToolTip(title)
                 button.setMinimumHeight(40 if self.sidebar_compact else 50)
                 button.setMaximumHeight(40 if self.sidebar_compact else 50)
             else:
-                button.setText(f'{icon}  {title}')
+                button.setText(title)
                 button.setToolTip('')
                 button.setMinimumHeight(0)
                 button.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX
             button.style().unpolish(button)
             button.style().polish(button)
+        self.refresh_sidebar_icons()
 
     def populate_sidebar_buttons(self):
         while self.sidebar_button_host.count():
@@ -465,7 +479,7 @@ class MdiMainWindow(QMainWindow):
         for tool_definition in self.tool_definitions:
             icon = tool_definition.get('icon', '📄')
             title = tool_definition['menu_title']
-            button = QPushButton(f'{icon}  {title}')
+            button = QPushButton(title)
             button.setObjectName('sidebarBtn')
             button.setEnabled(tool_definition['enabled'])
             button.setProperty('active', False)
@@ -508,6 +522,8 @@ class MdiMainWindow(QMainWindow):
                 f'QPushButton#headerLegendBtn {{ background-color: {color}; }}')
         else:
             self.legend_caution_btn.setStyleSheet('')
+            self._refresh_brand_mark()
+            self.refresh_sidebar_icons()
 
     def register_tools(self):
         tool_definitions = [
@@ -711,6 +727,7 @@ class MdiMainWindow(QMainWindow):
             b.setProperty('active', k == key)
             b.style().unpolish(b)
             b.style().polish(b)
+        self.refresh_sidebar_icons()
 
     def activate_view(self, key):
         if key == 'home':

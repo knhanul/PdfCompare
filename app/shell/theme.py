@@ -4,7 +4,12 @@ Append generated QSS after MODERN_QSS. Tool-local styles stay independent.
 """
 TOKENS = {
     'app_bg': '#F5F2F0',
-    'sidebar_bg': '#EAE7E4',
+    'sidebar_bg': '#F3F0ED',
+    'sidebar_border': '#E2DED9',
+    'sidebar_text': '#5C5550',
+    'sidebar_icon': '#8A827A',
+    'sidebar_group': '#A39B93',
+    'sidebar_active_bg': 'rgba(164, 71, 53, 0.08)',
     'canvas_bg': '#E7E3DF',
     'panel_bg': '#FBFAF9',
     'text': '#292D33',
@@ -26,20 +31,23 @@ THEME_CHOICES = [('default', '기본'), ('energy', '역동'), ('silver', '실버
 # page content, uses these palettes.
 THEMES = {
     'default': dict(TOKENS),
-    'energy': dict(TOKENS, app_bg='#F7F5F2', sidebar_bg='#ECE9E5',
+    'energy': dict(TOKENS, sidebar_active_bg='rgba(255, 72, 5, 0.08)', sidebar_border='#DED9D3', app_bg='#F7F5F2', sidebar_bg='#ECE9E5',
                    panel_bg='#FCFBF9', accent='#FF4805', accent_hover='#D83B00',
                    selected='#FFF0E6', hover='#F2EBE5', border='#DED9D3'),
-    'silver': dict(TOKENS, app_bg='#F1F3F5', sidebar_bg='#DDE1E5',
+    'silver': dict(TOKENS, sidebar_active_bg='rgba(83, 101, 119, 0.12)', sidebar_border='#C5CCD3',
+                   sidebar_text='#3E4750', sidebar_icon='#6F7A85', sidebar_group='#7D8792', app_bg='#F1F3F5', sidebar_bg='#DDE1E5',
                    canvas_bg='#D7DCE1', panel_bg='#FAFBFC', text='#252B32',
                    text_muted='#626D78', accent='#536577', accent_hover='#3F5061',
                    selected='#E1E7EE', hover='#E9EDF1', warning_bg='#F0EDE4',
                    border='#C5CCD3'),
-    'gold': dict(TOKENS, app_bg='#F6F3EB', sidebar_bg='#E7DFC9',
+    'gold': dict(TOKENS, sidebar_active_bg='rgba(128, 99, 45, 0.12)', sidebar_border='#D5C9AB',
+                 sidebar_text='#4A4232', sidebar_icon='#857859', sidebar_group='#968A6D', app_bg='#F6F3EB', sidebar_bg='#E7DFC9',
                  canvas_bg='#E3DDCF', panel_bg='#FCFAF4', text='#342F25',
                  text_muted='#786D55', accent='#80632D', accent_hover='#644C20',
                  selected='#EFE4C8', hover='#F0EBDD', warning_bg='#F6EBCF',
                  border='#D5C9AB'),
-    'black': dict(TOKENS, app_bg='#202124', sidebar_bg='#17181B',
+    'black': dict(TOKENS, sidebar_active_bg='rgba(175, 196, 218, 0.14)', sidebar_border='#2E3036',
+                  sidebar_text='#D2D5DB', sidebar_icon='#9AA0AA', sidebar_group='#7E848E', app_bg='#202124', sidebar_bg='#17181B',
                   canvas_bg='#111214', panel_bg='#292B30', text='#ECEEF2',
                   text_muted='#ADB2BC', accent='#AFC4DA', accent_hover='#CDDEEF',
                   selected='#384452', hover='#34373D', warning_bg='#433B29',
@@ -104,13 +112,21 @@ QWidget {{ color: {text}; background-color: {app_bg}; }}
 QMainWindow, QDialog, QScrollArea, QScrollArea > QWidget > QWidget {{ background: {app_bg}; }}
 QLabel, QCheckBox, QRadioButton {{ background: transparent; color: {text}; }}
 QWidget:disabled {{ color: {text_muted}; }}
-QFrame#sidebar {{ background: {sidebar_bg}; border-right: 1px solid {border}; }}
-QFrame#sidebarLogoCard {{ background: {panel_bg}; border-color: {border}; }}
-QLabel#sidebarBrandTitle, QPushButton#hamburgerBtn {{ color: {accent}; }}
-QLabel#sidebarBrandSubtitle, QLabel#headerTarget {{ color: {text_muted}; }}
-QPushButton#sidebarBtn, QPushButton#sidebarBtn[collapsed='true'] {{ color: {text}; background: transparent; }}
+QFrame#sidebar {{ background: {sidebar_bg}; border: none; border-right: 1px solid {sidebar_border}; }}
+QFrame#sidebar QLabel, QFrame#sidebarLogoCard, QFrame#sidebarFooter {{ background: transparent; }}
+QFrame#sidebarLogoCard {{ border: none; }}
+QFrame#sidebarFooter {{ border: none; border-top: 1px solid {sidebar_border}; }}
+QLabel#sidebarBrandTitle {{ color: {text}; font-size: 13px; font-weight: 700; }}
+QLabel#sidebarBrandSubtitle {{ color: {text_muted}; font-size: 11px; }}
+QPushButton#hamburgerBtn {{ color: {accent}; }}
+QLabel#headerTarget {{ color: {text_muted}; }}
+QLabel#sidebarGroupLabel {{ color: {sidebar_group}; font-size: 11px; font-weight: 600; letter-spacing: 1px; padding: 12px 10px 4px 10px; }}
+QPushButton#sidebarBtn {{ color: {sidebar_text}; background: transparent; border: none; border-left: 2px solid transparent;
+    border-radius: 6px; padding: 0 10px; min-height: 34px; max-height: 34px; text-align: left; font-size: 13px; font-weight: 500; }}
+QPushButton#sidebarBtn[collapsed='true'] {{ padding: 0; text-align: center; color: {sidebar_text}; }}
 QPushButton#sidebarBtn:hover {{ background: {hover}; color: {text}; }}
-QPushButton#sidebarBtn[active='true'] {{ background: {accent}; color: {on_accent}; }}
+QPushButton#sidebarBtn[active='true'] {{ background: {sidebar_active_bg}; color: {accent}; border-left: 2px solid {accent};
+    border-top-left-radius: 0; border-bottom-left-radius: 0; font-weight: 600; }}
 QFrame#headerBar {{ background: {app_bg}; border-bottom: 1px solid {border}; }}
 QLabel#headerTitle {{ color: {text}; }}
 QFrame#headerAccent {{ background: {accent}; }}
