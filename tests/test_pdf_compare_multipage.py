@@ -54,8 +54,9 @@ class MultiPageSelectionTests(unittest.TestCase):
             button = tool.btn_focus_mode
             self.assertIs(layout.itemAt(layout.count() - 1).widget(), tool.switch_toggle)
             self.assertIs(layout.itemAt(layout.count() - 2).widget(), button)
+            # 집중모드 전환은 헤더(우측 상단) 버튼이 담당하고, 도구별 버튼은 숨김 유지
             actions = [layout.itemAt(i).widget() for i in range(layout.count() - 1)
-                       if layout.itemAt(i).widget() is not None]
+                       if layout.itemAt(i).widget() not in (None, button)]
             before = [(action.isVisible(), action.minimumSize(), action.maximumSize())
                       for action in actions]
             for focused in (True, False):
@@ -63,7 +64,9 @@ class MultiPageSelectionTests(unittest.TestCase):
                 self.assertEqual(window.focus_mode, focused)
                 self.assertEqual(window.header_bar.isVisible(), not focused)
                 self.assertEqual(button.isChecked(), focused)
-                self.assertTrue(button.isVisible())
+                self.assertFalse(button.isVisible())
+                self.assertTrue(window.header_focus_btn.isVisible())
+                self.assertEqual(window.header_focus_btn.isChecked(), focused)
                 self.assertFalse(button.icon().isNull())
                 self.assertEqual(button.toolTip(), '일반 모드로 전환' if focused else '집중 모드로 전환')
                 self.assertTrue(all(action.isVisible() for action in actions))

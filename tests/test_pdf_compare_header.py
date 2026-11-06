@@ -26,7 +26,7 @@ class SharedHeaderTests(unittest.TestCase):
             ("pdf_compare", "PDF 지정 영역 비교"),
             ("pdf_hf_compare", "PDF 전체 비교"),
             ("pdf_editor", "PDF 편집 (분할/병합/페이지)"),
-            ("pdf_form", "PDF 양식"),
+            ("pdf_form", "PDF 입력폼 관리"),
             ("pdf_create", "PDF 생성"),
             ("file_rename", "파일 이름 관리"),
         ):

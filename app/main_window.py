@@ -314,7 +314,7 @@ class MdiMainWindow(QMainWindow):
                     font-size: 12px; border-radius: 5px;
                 }
                 QFrame#actionBar QFrame#toolToggle QPushButton#toolToggleBtn {
-                    padding: 4px 12px;
+                    padding: 3px 12px;
                     border-radius: 8px;
                     font-size: 12px;
                     min-height: 22px;
@@ -336,6 +336,7 @@ class MdiMainWindow(QMainWindow):
                     button.setFixedWidth(28)
             for widget, _ in normal['toggles']:
                 widget.layout().setContentsMargins(2, 0, 2, 0)
+                widget.setMaximumHeight(30)
         else:
             for layout, (margins, spacing) in zip(layouts, normal['layouts']):
                 layout.setContentsMargins(margins)
@@ -345,6 +346,7 @@ class MdiMainWindow(QMainWindow):
                 button.setMaximumSize(maximum)
             for widget, margins in normal['toggles']:
                 widget.layout().setContentsMargins(margins)
+                widget.setMaximumHeight(16777215)
             bar.setMinimumHeight(normal['minimum_height'])
             bar.setStyleSheet(normal['style'])
 

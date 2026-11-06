@@ -411,6 +411,9 @@ class PDFViewer(QScrollArea):
             label.update()
         if rebuild:
             self.update_selection_data()
+            # 제외 영역이 바뀌면 이전 비교 결과는 더 이상 유효하지 않음 (선택 영역은 유지)
+            if getattr(self, 'parent_tool', None) and hasattr(self.parent_tool, 'invalidate_comparison_results'):
+                self.parent_tool.invalidate_comparison_results()
 
     def page_image_rect(self, page_num):
         label = self.page_labels[page_num]
