@@ -82,6 +82,13 @@ class RenderService(QObject):
             self.cache.put(key, img)
             self.rendered.emit(key)
 
+    def configure(self, cache_mb=None, threads=None):
+        if cache_mb:
+            self.cache.max_bytes = int(cache_mb) * 1024 * 1024
+            self.cache.put_trim()
+        if threads:
+            self.pool.setMaxThreadCount(max(1, int(threads)))
+
     def forget(self, path):
         self.cache.drop_path(path)
 
@@ -97,4 +104,9 @@ def render_service():
     global _service
     if _service is None:
         _service = RenderService()
+        try:
+            from app.services import app_settings
+            _service.configure(app_settings.get('perf/render_cache_mb'), app_settings.get('perf/render_threads'))
+        except Exception:
+            pass
     return _service

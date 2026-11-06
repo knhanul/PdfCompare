@@ -50,4 +50,10 @@ QListWidget#navPanel {{ background: {sidebar_bg}; border: none; border-right: 1p
 QListWidget#navPanel::item:selected {{ background: {selected}; color: {accent}; }}
 QFrame#formBanner {{ background: {warning_bg}; border-bottom: 1px solid {border}; }}
 QLabel#sidebarGroupLabel {{ color: {text_muted}; font-size: 11px; font-weight: 600; padding: 8px 4px 2px 4px; }}
+QPushButton#viewerToolBtn:checked {{ background: {selected}; border-color: {accent}; color: {accent}; }}
+QFrame#workPanel, QFrame#globalSearchPanel {{ background: {panel_bg}; border-left: 1px solid {border}; }}
+QWidget#settingsPage {{ background: {app_bg}; }}
+QDialog#commandPalette {{ background: {panel_bg}; border: 1px solid {border}; border-radius: 8px; }}
+QDialog#commandPalette QListWidget {{ border: none; }}
+QDialog#commandPalette QListWidget::item:selected {{ background: {selected}; color: {accent}; }}
 """.format(**TOKENS)

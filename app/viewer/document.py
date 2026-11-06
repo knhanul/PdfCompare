@@ -35,6 +35,18 @@ class PdfDocument:
         except Exception:
             return 0
 
+    def form_fields(self, limit=1000):
+        out = []
+        try:
+            for i, page in enumerate(self._doc):
+                for w in page.widgets() or ():
+                    out.append((w.field_name or '(이름 없음)', i))
+                    if len(out) >= limit:
+                        return out
+        except Exception:
+            pass
+        return out
+
     def search(self, text, max_hits=500):
         hits = []
         if not text:

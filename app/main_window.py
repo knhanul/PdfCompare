@@ -11,13 +11,14 @@ from app.common.about_dialog import AboutDialog, get_about_info
 from app.common.resources import APP_NAME, COMPANY_NAME, DEVELOPER, VERSION, get_about_icon_path, get_icon_path, get_logo_path
 from app.common.styles import COLOR_PRIMARY, MODERN_QSS
 from app.common.comparison_settings import ComparisonSettings
-from app.services import recent_docs, workspace_session
+from app.services import app_settings, recent_docs, workspace_session
 from app.shell.theme import SHELL_QSS
 from app.shell.viewer_workspace import ViewerWorkspace
 from app.shell.welcome_page import WelcomePage
 from app.viewer.document_manager import DocumentManager
 
-TOOL_CACHE_MAX = 3  # LRU limit for instantiated tool widgets
+TOOL_CACHE_MAX = 3  # default LRU limit for tool widgets (설정 › 성능에서 변경)
+SIDEBAR_COMPACT_WIDTH = 56
 
 
 class MdiMainWindow(QMainWindow):
@@ -42,6 +43,9 @@ class MdiMainWindow(QMainWindow):
         self.sidebar_expanded_width = 220
         self.sidebar_collapsed_width = 0  # fully hide in focus
         self.sidebar_width = self.sidebar_expanded_width
+        self.sidebar_compact = False      # icon-only sidebar (narrow window or manual)
+        self.sidebar_manual = None        # None = automatic; True/False = user choice
+        self.settings_page = None
         self.sidebar_buttons = []
         self.tool_definitions = []
         self.current_tool_widget = None
@@ -67,13 +71,19 @@ class MdiMainWindow(QMainWindow):
         self.sidebar_animation.setDuration(250)
         self.sidebar_animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
         self.sidebar_animation.valueChanged.connect(self.sync_sidebar_width)
-        self.sidebar_animation.finished.connect(lambda: self.apply_sidebar_collapsed_state(self.sidebar_width == self.sidebar_collapsed_width))
+        self.sidebar_animation.finished.connect(lambda: self.apply_sidebar_collapsed_state(self.sidebar_width < self.sidebar_expanded_width))
 
         self.register_tools()
         self.populate_sidebar_buttons()
         # Viewer-first: start on the welcome page. No tool module is imported here.
+        self.apply_settings()
         self.show_welcome()
         QShortcut(QKeySequence('Ctrl+O'), self, activated=self.open_pdf_dialog)
+        QShortcut(QKeySequence('Ctrl+K'), self, activated=self.show_command_palette)
+        QShortcut(QKeySequence('Ctrl+Shift+F'), self, activated=self.show_global_search)
+        QShortcut(QKeySequence('Ctrl+,'), self, activated=self.show_settings)
+        if app_settings.get('workspace/auto_restore') and workspace_session.load_session():
+            QTimer.singleShot(0, self.restore_session)  # after first paint
 
     def create_sidebar(self):
         sidebar = QFrame()
@@ -126,6 +136,15 @@ class MdiMainWindow(QMainWindow):
         self.sidebar_button_host.setSpacing(6)
         sidebar_layout.addLayout(self.sidebar_button_host)
         sidebar_layout.addStretch()
+        btn = QPushButton('설정')
+        btn.setObjectName('sidebarBtn')
+        btn.setProperty('active', False)
+        btn.setProperty('nav_icon', '⚙')
+        btn.setProperty('nav_title', '설정')
+        btn.setToolTip('설정 및 작업 공간 관리 (Ctrl+,)')
+        btn.clicked.connect(partial(self.activate_view, 'settings'))
+        sidebar_layout.addWidget(btn)
+        self.nav_buttons['settings'] = btn
         return sidebar
 
     def create_right_panel(self):
@@ -152,6 +171,7 @@ class MdiMainWindow(QMainWindow):
         self.viewer.split_requested.connect(self.open_split_view)
         self.viewer.close_doc.connect(self._on_viewer_doc_closed)
         self.viewer.current_changed.connect(self._update_title)
+        self.viewer.tool_requested.connect(self._on_viewer_tool_request)
         self.mode_stack.addWidget(self.viewer)
 
         # Tool container (existing tools are hosted here unchanged)
@@ -227,10 +247,10 @@ class MdiMainWindow(QMainWindow):
             self._dock_focus_button(True)
         else:
             # Exit focus mode
-            self.sidebar_width = self.sidebar_expanded_width
+            self.sidebar_width = self._normal_sidebar_width()
             self.sidebar_animation.stop()
             self.sidebar_animation.setStartValue(self.sidebar.width())
-            self.sidebar_animation.setEndValue(self.sidebar_expanded_width)
+            self.sidebar_animation.setEndValue(self.sidebar_width)
             self.sidebar_animation.start()
             self._dock_focus_button(False)
             self.header_bar.show()
@@ -284,6 +304,39 @@ class MdiMainWindow(QMainWindow):
         super().resizeEvent(event)
         if getattr(self, 'focus_mode', False):
             self._position_focus_button()
+        elif hasattr(self, 'sidebar_animation'):
+            self.update_sidebar_compact()
+
+    # ---- narrow window: icon sidebar --------------------------------------
+    def _normal_sidebar_width(self):
+        return SIDEBAR_COMPACT_WIDTH if self.sidebar_compact else self.sidebar_expanded_width
+
+    def update_sidebar_compact(self, animate=False):
+        if self.sidebar_manual is not None:
+            want = self.sidebar_manual
+        elif app_settings.get('ui/auto_compact_sidebar'):
+            want = self.width() < app_settings.get('ui/compact_threshold')
+        else:
+            want = False
+        if want == self.sidebar_compact and self.sidebar.width() == self._normal_sidebar_width():
+            return
+        self.sidebar_compact = want
+        if self.focus_mode:
+            return
+        self.sidebar_width = self._normal_sidebar_width()
+        self.sidebar_animation.stop()
+        if animate:
+            self.sidebar_animation.setStartValue(self.sidebar.width())
+            self.sidebar_animation.setEndValue(self.sidebar_width)
+            self.sidebar_animation.start()
+        else:
+            self.sync_sidebar_width(self.sidebar_width)
+            self.apply_sidebar_collapsed_state(want)
+        self.sidebar.layout().setContentsMargins(*((4, 12, 4, 12) if want else (12, 18, 12, 18)))
+
+    def toggle_sidebar_compact(self):
+        self.sidebar_manual = not self.sidebar_compact
+        self.update_sidebar_compact(animate=True)
 
     def update_focus_layout(self, tool):
         bar = tool.bottom_action_bar
@@ -376,6 +429,7 @@ class MdiMainWindow(QMainWindow):
         for button in self.nav_buttons.values():
             button.setProperty('collapsed', collapsed)
             button.setText(button.property('nav_icon') if collapsed else button.property('nav_title'))
+            button.setToolTip(button.property('nav_title') if collapsed else '')
             button.style().unpolish(button)
             button.style().polish(button)
         for tool_definition, button in zip(self.tool_definitions, self.sidebar_buttons):
@@ -384,8 +438,9 @@ class MdiMainWindow(QMainWindow):
                 # Use icon property for collapsed state
                 icon = tool_definition.get('icon', '📄')
                 button.setText(icon)
-                button.setMinimumHeight(50)
-                button.setMaximumHeight(50)
+                button.setToolTip(tool_definition['menu_title'])
+                button.setMinimumHeight(40 if self.sidebar_compact else 50)
+                button.setMaximumHeight(40 if self.sidebar_compact else 50)
             else:
                 button.setText(tool_definition['menu_title'])
                 button.setMinimumHeight(0)
@@ -409,7 +464,7 @@ class MdiMainWindow(QMainWindow):
                 button.clicked.connect(partial(self.open_tool, tool_definition['key']))
             self.sidebar_button_host.addWidget(button)
             self.sidebar_buttons.append(button)
-        self.apply_sidebar_collapsed_state(self.sidebar_width == self.sidebar_collapsed_width)
+        self.apply_sidebar_collapsed_state(self.sidebar_width < self.sidebar_expanded_width)
 
     def set_active_sidebar_button(self, tool_key):
         for tool_definition, button in zip(self.tool_definitions, self.sidebar_buttons):
@@ -606,7 +661,7 @@ class MdiMainWindow(QMainWindow):
     def _evict_tools(self, keep=None):
         """LRU: keep at most TOOL_CACHE_MAX tool widgets; skip tools with unsaved changes."""
         for key in list(self.tool_cache):
-            if len(self.tool_cache) <= TOOL_CACHE_MAX:
+            if len(self.tool_cache) <= self.tool_cache_max:
                 break
             if key in (keep, self.current_tool_key):
                 continue
@@ -634,6 +689,8 @@ class MdiMainWindow(QMainWindow):
             return 'viewer'
         if self.split_view is not None and w is self.split_view:
             return 'split'
+        if self.settings_page is not None and w is self.settings_page:
+            return 'settings'
         return None
 
     def _set_active_nav(self, key):
@@ -652,11 +709,98 @@ class MdiMainWindow(QMainWindow):
                 self.open_pdf_dialog()
         elif key == 'split':
             self.open_split_view()
+        elif key == 'settings':
+            self.show_settings()
+
+    # ---- settings (screen 7) --------------------------------------------------
+    def apply_settings(self, key='*'):
+        self.tool_cache_max = max(1, app_settings.get('perf/tool_cache_max'))
+        self.viewer.default_fit = app_settings.get('viewer/default_zoom')
+        self.viewer.nav_default_visible = app_settings.get('viewer/show_nav')
+        if key in ('*', 'viewer/show_nav'):
+            self.viewer.set_nav_visible(self.viewer.nav_default_visible)
+        if 'app.viewer.render_service' in __import__('sys').modules:
+            from app.viewer.render_service import render_service
+            render_service().configure(app_settings.get('perf/render_cache_mb'), app_settings.get('perf/render_threads'))
+        if key in ('*', 'ui/auto_compact_sidebar'):
+            self.sidebar_manual = None
+            self.update_sidebar_compact()
+        if key == 'perf/tool_cache_max':
+            self._evict_tools(keep=self.current_tool_key)
+
+    def show_settings(self):
+        if self.settings_page is None:
+            from app.shell.settings_page import SettingsPage  # lazy
+            self.settings_page = SettingsPage()
+            self.settings_page.settings_changed.connect(self.apply_settings)
+            self.settings_page.recent_cleared.connect(lambda: self.welcome_page.set_recent([]))
+            self.mode_stack.addWidget(self.settings_page)
+        else:
+            self.settings_page.load()
+        self._hide_current_tool()
+        self.mode_stack.setCurrentWidget(self.settings_page)
+        self.header_title.setText('설정')
+        self._set_active_nav('settings')
+
+    # ---- unified search / command palette ------------------------------------
+    def show_global_search(self):
+        if not self.viewer.count():
+            return
+        self.show_viewer()
+        self.viewer.show_global_search()
+
+    def _on_viewer_tool_request(self, key, path):
+        if key == 'pdf_form' and path:
+            self.open_form_for(path)
+        elif key in ('pdf_compare', 'pdf_hf_compare') and path:
+            self.open_tool(key)
+            self._handoff_to_compare([path])
+        else:
+            self.open_tool(key)
+
+    def palette_commands(self):
+        cmds = [
+            {'title': 'PDF 열기', 'keywords': 'open 파일', 'shortcut': 'Ctrl+O', 'run': self.open_pdf_dialog},
+            {'title': '홈 (시작 화면)', 'keywords': 'home welcome', 'run': self.show_welcome},
+            {'title': 'PDF 보기', 'keywords': 'viewer 뷰어', 'run': lambda: self.activate_view('viewer')},
+            {'title': '두 PDF 동시 보기', 'keywords': 'split 나란히 분할', 'run': self.open_split_view},
+            {'title': '열린 PDF 전체에서 찾기', 'keywords': 'search 검색 통합', 'shortcut': 'Ctrl+Shift+F',
+             'run': self.show_global_search},
+            {'title': '문서에서 찾기', 'keywords': 'find 검색', 'shortcut': 'Ctrl+F',
+             'run': lambda: (self.show_viewer(), self.viewer.show_search()) if self.viewer.count() else None},
+            {'title': '문서 정보 패널', 'keywords': 'info 속성',
+             'run': lambda: self._viewer_mode('info')},
+            {'title': '편집 작업 패널', 'keywords': 'edit',
+             'run': lambda: self._viewer_mode('edit')},
+            {'title': '설정', 'keywords': 'settings 옵션 캐시 테마', 'shortcut': 'Ctrl+,', 'run': self.show_settings},
+            {'title': '집중모드 전환', 'keywords': 'focus', 'run': self.toggle_sidebar},
+            {'title': '사이드바 아이콘으로 줄이기/펼치기', 'keywords': 'sidebar compact', 'run': self.toggle_sidebar_compact},
+            {'title': '지난 작업 복원', 'keywords': 'restore session', 'run': self.restore_session},
+        ]
+        for d in self.tool_definitions:
+            if d['enabled']:
+                cmds.append({'title': d['menu_title'], 'keywords': d['window_title'] + ' 도구',
+                             'run': partial(self.open_tool, d['key'])})
+        return cmds
+
+    def _viewer_mode(self, mode):
+        if self.viewer.count():
+            self.show_viewer()
+            self.viewer.open_work_mode(mode)
+
+    def show_command_palette(self):
+        from app.shell.command_palette import CommandPalette  # lazy
+        dlg = CommandPalette(self.palette_commands(), self)
+        g = self.geometry()
+        dlg.move(g.x() + (g.width() - 520) // 2, g.y() + 80)
+        self._palette = dlg
+        dlg.exec()
 
     def show_welcome(self):
         self._hide_current_tool()
         self.welcome_page.set_recent(recent_docs.load_recent())
-        self.welcome_page.set_restore_available(bool(workspace_session.load_session()) and not self.viewer.count())
+        self.welcome_page.set_restore_available(app_settings.get('workspace/offer_restore')
+                                                and bool(workspace_session.load_session()) and not self.viewer.count())
         self.mode_stack.setCurrentWidget(self.welcome_page)
         self.header_title.setText(APP_NAME)
         self._set_active_nav('home')
@@ -691,7 +835,10 @@ class MdiMainWindow(QMainWindow):
             QMessageBox.warning(self, 'PDF 열기 실패', f'{os.path.basename(path)}\n{e}')
             return False
         recent_docs.add_recent(doc.path)
-        self.viewer.add_document(doc, page)
+        if app_settings.get('viewer/open_mode') == 'replace' and self.viewer.count():
+            self.viewer.replace_current(doc, page)
+        else:
+            self.viewer.add_document(doc, page)
         self.show_viewer()
         return True
 

@@ -4,6 +4,8 @@ from PyQt6.QtGui import QKeySequence, QShortcut
 from PyQt6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QStackedWidget,
                              QTabBar, QVBoxLayout, QWidget)
 
+from app.shell.global_search import GlobalSearchPanel
+from app.shell.work_panel import WorkPanel
 from app.viewer.nav_panel import NavPanel
 from app.viewer.pdf_canvas import PdfCanvas
 
@@ -65,6 +67,7 @@ class ViewerWorkspace(QWidget):
     tab_count_changed = pyqtSignal(int)
     current_changed = pyqtSignal(object)    # doc or None
     close_doc = pyqtSignal(str)
+    tool_requested = pyqtSignal(str, str)   # tool key, current path
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -86,8 +89,27 @@ class ViewerWorkspace(QWidget):
         self.search_bar = self._build_search()
         lay.addWidget(self.search_bar)
 
+        self.mode_bar = self._build_mode_bar()
+        lay.addWidget(self.mode_bar)
+
+        body = QHBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
         self.stack = QStackedWidget()
-        lay.addWidget(self.stack, 1)
+        body.addWidget(self.stack, 1)
+        self.global_search = GlobalSearchPanel(lambda: [v.doc for v in self._views])
+        self.global_search.result_activated.connect(self.jump_to)
+        self.global_search.closed.connect(self.hide_global_search)
+        self.global_search.hide()
+        body.addWidget(self.global_search)
+        self.work_panel = WorkPanel()
+        self.work_panel.closed.connect(self.close_work_mode)
+        self.work_panel.tool_requested.connect(self._request_tool)
+        self.work_panel.field_selected.connect(lambda pg: self._cv() and self._cv().canvas.go_to_page(pg))
+        body.addWidget(self.work_panel)
+        lay.addLayout(body, 1)
+        self.default_fit = 'width'
+        self.nav_default_visible = True
 
         self.tabs.currentChanged.connect(self._on_tab)
         self.tabs.tabCloseRequested.connect(self._close_tab)
@@ -95,6 +117,7 @@ class ViewerWorkspace(QWidget):
         self._views = []
 
         QShortcut(QKeySequence('Ctrl+F'), self, activated=self.show_search)
+        QShortcut(QKeySequence('Ctrl+Shift+F'), self, activated=self.show_global_search)
         QShortcut(QKeySequence('Ctrl+='), self, activated=lambda: self._cv() and self._cv().canvas.zoom_in())
         QShortcut(QKeySequence('Ctrl+-'), self, activated=lambda: self._cv() and self._cv().canvas.zoom_out())
         QShortcut(QKeySequence('Ctrl+W'), self, activated=lambda: self._close_tab(self.tabs.currentIndex()))
@@ -141,8 +164,121 @@ class ViewerWorkspace(QWidget):
         bl.addWidget(self._btn('쪽 맞춤', '한 페이지 전체 보기', lambda: self._cv() and self._cv().canvas.set_fit('page')))
         bl.addStretch()
         bl.addWidget(self._btn('찾기', '문서에서 찾기 (Ctrl+F)', self.show_search))
+        bl.addWidget(self._btn('전체 찾기', '열린 PDF 전체에서 찾기 (Ctrl+Shift+F)', self.show_global_search))
+        self.mode_buttons = {}
+        for key, text, tip in (('info', '정보', '문서 정보 패널'), ('edit', '편집', '편집 작업 패널'),
+                               ('form', '입력 항목', '이 문서의 입력 항목 패널')):
+            b = self._btn(text, tip, lambda _=False, k=key: self.toggle_work_mode(k))
+            b.setCheckable(True)
+            self.mode_buttons[key] = b
+            bl.addWidget(b)
+        self.mode_buttons['form'].hide()  # shown only for PDFs that contain form fields
         bl.addWidget(self._btn('두 PDF 동시 보기', '현재 문서와 다른 문서를 나란히 보기', self.split_requested.emit))
         return bar
+
+    def _build_mode_bar(self):
+        """Situational toolbar: content depends on the active work mode."""
+        bar = QFrame()
+        bar.setObjectName('contextToolbar')
+        bl = QHBoxLayout(bar)
+        bl.setContentsMargins(8, 3, 8, 3)
+        bl.setSpacing(4)
+        self.mode_label = QLabel()
+        self.mode_label.setObjectName('mutedLabel')
+        bl.addWidget(self.mode_label)
+        bl.addSpacing(8)
+        self.mode_actions = {}
+        specs = {
+            'info': [('경로 복사', self._copy_path)],
+            'edit': [('PDF 편집', lambda: self._request_tool('pdf_editor')),
+                     ('PDF 생성', lambda: self._request_tool('pdf_create')),
+                     ('영역지정비교', lambda: self._request_tool('pdf_compare')),
+                     ('전체비교', lambda: self._request_tool('pdf_hf_compare'))],
+            'form': [('PDF 입력폼 관리', lambda: self._request_tool('pdf_form'))],
+        }
+        for mode, items in specs.items():
+            btns = []
+            for text, slot in items:
+                b = self._btn(text, text, slot)
+                bl.addWidget(b)
+                btns.append(b)
+            self.mode_actions[mode] = btns
+        bl.addStretch()
+        bl.addWidget(self._btn('작업 끝내기', '작업 패널 닫기', self.close_work_mode))
+        bar.hide()
+        return bar
+
+    # ---- work modes --------------------------------------------------------
+    MODE_LABELS = {'info': '문서 정보', 'edit': '편집 모드', 'form': '입력 항목 모드'}
+
+    def toggle_work_mode(self, mode):
+        if self.work_panel.mode == mode:
+            self.close_work_mode()
+        else:
+            self.open_work_mode(mode)
+
+    def open_work_mode(self, mode):
+        if not self._cv():
+            return
+        self.work_panel.open_mode(mode, self.current_doc())
+        self.mode_label.setText(self.MODE_LABELS[mode])
+        for m, btns in self.mode_actions.items():
+            for b in btns:
+                b.setVisible(m == mode)
+        for m, b in self.mode_buttons.items():
+            b.setChecked(m == mode)
+        self.mode_bar.show()
+
+    def close_work_mode(self):
+        self.work_panel.close_panel()
+        self.mode_bar.hide()
+        for b in self.mode_buttons.values():
+            b.setChecked(False)
+
+    def work_mode(self):
+        return self.work_panel.mode
+
+    def _request_tool(self, key):
+        d = self.current_doc()
+        self.tool_requested.emit(key, d.path if d else '')
+
+    def _copy_path(self):
+        from PyQt6.QtWidgets import QApplication
+        d = self.current_doc()
+        if d:
+            QApplication.clipboard().setText(d.path)
+
+    # ---- global search -----------------------------------------------------
+    def show_global_search(self):
+        self.global_search.show()
+        if self.search_edit.text().strip() and not self.global_search.edit.text():
+            self.global_search.edit.setText(self.search_edit.text().strip())
+        self.global_search.focus_input()
+
+    def hide_global_search(self):
+        self.global_search.hide()
+        for v in self._views:
+            v.canvas.highlights = {}
+            v.canvas.viewport().update()
+
+    def jump_to(self, path, page, rect=None):
+        i = self.index_of(path)
+        if i < 0:
+            return False
+        self.tabs.setCurrentIndex(i)
+        v = self._views[i]
+        v.canvas.highlights = {page: [tuple(rect)]} if rect else {}
+        v.canvas.go_to_page(page, rect[1] if rect else None)
+        v.canvas.viewport().update()
+        return True
+
+    def replace_current(self, doc, page=0):
+        """Open doc in place of the current tab (기본 열기 방식 = 현재 탭 바꾸기)."""
+        i = self.tabs.currentIndex()
+        if self.index_of(doc.path) >= 0 or i < 0:
+            return self.add_document(doc, page)
+        self.add_document(doc, page)
+        self._close_tab(i)
 
     def _build_search(self):
         bar = QFrame()
@@ -183,6 +319,8 @@ class ViewerWorkspace(QWidget):
             self.tabs.setCurrentIndex(i)
             return
         view = DocView(doc)
+        view.canvas.fit_mode = None if self.default_fit == '100' else self.default_fit
+        view.nav.setVisible(self.nav_default_visible)
         view.banner.fill_requested.connect(lambda p=doc.path: self.form_fill_requested.emit(p))
         view.canvas.page_changed.connect(self._sync_status)
         view.canvas.zoom_changed.connect(self._sync_status)
@@ -204,12 +342,21 @@ class ViewerWorkspace(QWidget):
         n = view.doc.form_field_count()
         if n > 0:
             view.banner.show_count(n)
+            if view is self._cv():
+                self.mode_buttons['form'].setVisible(True)
 
     def _on_tab(self, i):
         if 0 <= i < len(self._views):
             self.stack.setCurrentWidget(self._views[i])
         self._sync_status()
-        self.current_changed.emit(self.current_doc())
+        d = self.current_doc()
+        self.mode_buttons['form'].setVisible(bool(d and d.form_field_count()))
+        if self.work_panel.mode:
+            if self.work_panel.mode == 'form' and not self.mode_buttons['form'].isVisible():
+                self.close_work_mode()
+            else:
+                self.work_panel.refresh(d)
+        self.current_changed.emit(d)
 
     def _on_moved(self, a, b):
         self._views.insert(b, self._views.pop(a))
@@ -223,6 +370,8 @@ class ViewerWorkspace(QWidget):
         path = view.doc.path
         view.deleteLater()
         self.close_doc.emit(path)
+        if not self._views:
+            self.close_work_mode()
         self.tab_count_changed.emit(len(self._views))
 
     def session_entries(self):

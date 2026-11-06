@@ -24,6 +24,11 @@ class PageCache:
             _, ev = self._items.popitem(last=False)
             self._bytes -= ev.sizeInBytes()
 
+    def put_trim(self):
+        while self._bytes > self.max_bytes and self._items:
+            _, ev = self._items.popitem(last=False)
+            self._bytes -= ev.sizeInBytes()
+
     def drop_path(self, path):
         for k in [k for k in self._items if k[0] == path]:
             self._bytes -= self._items.pop(k).sizeInBytes()
