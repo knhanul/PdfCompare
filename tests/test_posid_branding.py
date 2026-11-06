@@ -50,6 +50,7 @@ def test_sidebar_uses_official_emblem_not_document_mark(brand_env):
     w = MdiMainWindow()
     try:
         assert w.sidebar_brand_title.text() == 'Posid PDF'
+        assert w.sidebar_brand_subtitle.text() == 'PDF Workspace'
         assert w.windowTitle().startswith('Posid PDF')
         pm = w.sidebar_logo.pixmap()
         assert pm is not None and not pm.isNull()

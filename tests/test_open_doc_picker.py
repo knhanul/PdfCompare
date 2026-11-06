@@ -88,5 +88,9 @@ def test_viewer_has_tab_open_button(qapp):
     v = ViewerWorkspace()
     assert hasattr(v, 'btn_open_tab')
     assert v.btn_open_tab.toolTip() == 'PDF 열기 (Ctrl+O)'
+    assert v.btn_open_tab.text() == '＋ PDF 열기'
+    assert v.btn_open_tab.objectName() == 'openPdfTabBtn'
+    assert v.tabs.parentWidget().layout().indexOf(v.btn_open_tab) == \
+        v.tabs.parentWidget().layout().indexOf(v.tabs) + 1
     # signal exists
     assert hasattr(v, 'open_requested')

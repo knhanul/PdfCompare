@@ -5,10 +5,10 @@ import os
  
 from PyQt6.QtCore import QEasingCurve, QLibraryInfo, QLocale, QPropertyAnimation, QSize, Qt, QTimer, QTranslator
 from PyQt6.QtGui import QFont, QIcon, QKeySequence, QPixmap, QShortcut
-from PyQt6.QtWidgets import QApplication, QFileDialog, QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton, QStackedWidget, QStyle, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QApplication, QFileDialog, QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton, QScrollArea, QStackedWidget, QStyle, QVBoxLayout, QWidget
  
 from app.common.about_dialog import AboutDialog, get_about_info
-from app.common.resources import APP_NAME, COMPANY_NAME, DEVELOPER, VERSION, get_about_icon_path, get_icon_path, get_logo_path
+from app.common.resources import APP_NAME, DEVELOPER, VERSION, get_about_icon_path, get_icon_path, get_logo_path
 from app.common.styles import COLOR_PRIMARY, MODERN_QSS
 from app.common.comparison_settings import ComparisonSettings
 from app.services import app_settings, recent_docs, workspace_session
@@ -40,7 +40,7 @@ class MdiMainWindow(QMainWindow):
         self.setCentralWidget(self.main_widget)
 
         self.focus_mode = False
-        self.sidebar_expanded_width = 220
+        self.sidebar_expanded_width = 224
         self.sidebar_collapsed_width = 0  # fully hide in focus
         self.sidebar_width = self.sidebar_expanded_width
         self.sidebar_compact = False      # icon-only sidebar (narrow window or manual)
@@ -91,30 +91,47 @@ class MdiMainWindow(QMainWindow):
         sidebar.setMinimumWidth(self.sidebar_expanded_width)
         sidebar.setMaximumWidth(self.sidebar_expanded_width)
         sidebar_layout = QVBoxLayout(sidebar)
-        sidebar_layout.setContentsMargins(12, 18, 12, 18)
-        sidebar_layout.setSpacing(10)
+        sidebar_layout.setContentsMargins(10, 14, 10, 14)
+        sidebar_layout.setSpacing(6)
 
-        logo_card = QFrame()
-        logo_card.setObjectName('sidebarLogoCard')
-        logo_layout = QHBoxLayout(logo_card)
-        logo_layout.setContentsMargins(6, 2, 6, 10)
+        self.logo_card = QFrame()
+        self.logo_card.setObjectName('sidebarLogoCard')
+        logo_layout = QHBoxLayout(self.logo_card)
+        logo_layout.setContentsMargins(8, 6, 8, 6)
         logo_layout.setSpacing(10)
         self.sidebar_logo = QLabel()
         self.sidebar_logo.setObjectName('sidebarBrandMark')
-        self.sidebar_logo.setFixedSize(32, 32)
+        self.sidebar_logo.setFixedSize(36, 36)
         self.sidebar_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._refresh_brand_mark()
         brand_text = QVBoxLayout()
-        brand_text.setSpacing(0)
+        brand_text.setContentsMargins(0, 0, 0, 0)
+        brand_text.setSpacing(1)
         self.sidebar_brand_title = QLabel(APP_NAME)
         self.sidebar_brand_title.setObjectName('sidebarBrandTitle')
-        self.sidebar_brand_subtitle = QLabel(COMPANY_NAME)
+        self.sidebar_brand_subtitle = QLabel('PDF Workspace')
         self.sidebar_brand_subtitle.setObjectName('sidebarBrandSubtitle')
         brand_text.addWidget(self.sidebar_brand_title)
         brand_text.addWidget(self.sidebar_brand_subtitle)
-        logo_layout.addWidget(self.sidebar_logo)
+        logo_layout.addWidget(self.sidebar_logo, 0, Qt.AlignmentFlag.AlignVCenter)
         logo_layout.addLayout(brand_text, 1)
-        sidebar_layout.addWidget(logo_card)
+        sidebar_layout.addWidget(self.logo_card)
+
+        self.sidebar_brand_divider = QFrame()
+        self.sidebar_brand_divider.setObjectName('sidebarDivider')
+        self.sidebar_brand_divider.setFrameShape(QFrame.Shape.HLine)
+        sidebar_layout.addWidget(self.sidebar_brand_divider)
+
+        self.sidebar_scroll = QScrollArea()
+        self.sidebar_scroll.setObjectName('sidebarScroll')
+        self.sidebar_scroll.setWidgetResizable(True)
+        self.sidebar_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.sidebar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll_body = QWidget()
+        scroll_body.setObjectName('sidebarScrollBody')
+        scroll_layout = QVBoxLayout(scroll_body)
+        scroll_layout.setContentsMargins(0, 2, 0, 2)
+        scroll_layout.setSpacing(4)
 
         self.view_button_host = QVBoxLayout()
         self.view_button_host.setSpacing(2)
@@ -128,14 +145,25 @@ class MdiMainWindow(QMainWindow):
             btn.clicked.connect(partial(self.activate_view, key))
             self.view_button_host.addWidget(btn)
             self.nav_buttons[key] = btn
-        sidebar_layout.addLayout(self.view_button_host)
+        scroll_layout.addLayout(self.view_button_host)
+
+        self.feature_group_label = QLabel('핵심 기능')
+        self.feature_group_label.setObjectName('sidebarGroupLabel')
+        scroll_layout.addWidget(self.feature_group_label)
+        self.feature_button_host = QVBoxLayout()
+        self.feature_button_host.setSpacing(6)
+        scroll_layout.addLayout(self.feature_button_host)
+
         self.tools_group_label = QLabel('도구')
         self.tools_group_label.setObjectName('sidebarGroupLabel')
-        sidebar_layout.addWidget(self.tools_group_label)
+        scroll_layout.addWidget(self.tools_group_label)
         self.sidebar_button_host = QVBoxLayout()
         self.sidebar_button_host.setSpacing(2)
-        sidebar_layout.addLayout(self.sidebar_button_host)
-        sidebar_layout.addStretch()
+        scroll_layout.addLayout(self.sidebar_button_host)
+        scroll_layout.addStretch()
+        self.sidebar_scroll.setWidget(scroll_body)
+        sidebar_layout.addWidget(self.sidebar_scroll, 1)
+
         footer = QFrame()
         footer.setObjectName('sidebarFooter')
         footer_layout = QVBoxLayout(footer)
@@ -165,10 +193,11 @@ class MdiMainWindow(QMainWindow):
             theme_id = app_settings.get('ui/theme') or 'default'
         except Exception:
             pass
-        # Official 기관문양 — do not recolor; light pad only on black chrome.
-        pm = official_brand_pixmap(32, light_pad=(theme_id == 'black'))
+        tokens = self._sidebar_tokens()
+        # Official 기관문양 — do not recolor; neutral light pad keeps crisp contrast across themes.
+        pm = official_brand_pixmap(34, light_pad=True, pad_bg='#FFFFFF', pad_border=tokens['brand_border'])
         if pm is None or pm.isNull():
-            pm = brand_mark(self._sidebar_tokens()['accent'], 32)
+            pm = brand_mark(tokens['accent'], 34)
         self.sidebar_logo.setPixmap(pm)
 
     def refresh_sidebar_icons(self):
@@ -176,12 +205,26 @@ class MdiMainWindow(QMainWindow):
         pairs = [(b.property('nav_icon'), b) for b in self.nav_buttons.values()]
         pairs += [(d['key'], b) for d, b in zip(self.tool_definitions, self.sidebar_buttons)]
         for key, b in pairs:
-            color = tokens['accent'] if b.property('active') else tokens['sidebar_icon']
-            b.setIcon(line_icon(key, color, 18))
-            b.setIconSize(QSize(18, 18))
+            is_featured = bool(b.property('featured'))
+            is_active = bool(b.property('active'))
+            if is_featured or is_active:
+                color = tokens['accent']
+            else:
+                color = tokens['sidebar_icon']
+            stroke = 1.75 if is_featured else 1.5
+            icon = line_icon(key, color, 18, stroke=stroke)
+            feat_icon_lbl = getattr(b, '_feature_icon_label', None)
+            if feat_icon_lbl is not None and not b.property('collapsed'):
+                b.setIcon(QIcon())
+                feat_icon_lbl.setPixmap(icon.pixmap(QSize(18, 18)))
+            else:
+                b.setIcon(icon)
+                b.setIconSize(QSize(18, 18))
         if hasattr(self, 'header_focus_btn') and getattr(self, 'focus_mode', False):
             self.header_focus_btn.setIcon(line_icon('exit_focus', tokens['accent'], 16))
             self.header_focus_btn.setIconSize(QSize(16, 16))
+        if hasattr(self, 'welcome_page') and hasattr(self.welcome_page, 'refresh_theme_icons'):
+            self.welcome_page.refresh_theme_icons(tokens)
 
     def create_right_panel(self):
         right_panel = QWidget()
@@ -383,7 +426,7 @@ class MdiMainWindow(QMainWindow):
         else:
             self.sync_sidebar_width(self.sidebar_width)
             self.apply_sidebar_collapsed_state(want)
-        self.sidebar.layout().setContentsMargins(*((4, 12, 4, 12) if want else (12, 18, 12, 18)))
+        self.sidebar.layout().setContentsMargins(*((4, 12, 4, 12) if want else (10, 14, 10, 14)))
 
     def toggle_sidebar_compact(self):
         self.sidebar_manual = not self.sidebar_compact
@@ -465,64 +508,137 @@ class MdiMainWindow(QMainWindow):
         # Quiet Brand: the official mark stays; only the title block collapses.
         self.sidebar_brand_title.setVisible(not collapsed)
         self.sidebar_brand_subtitle.setVisible(not collapsed)
+        if hasattr(self, 'logo_card'):
+            self.logo_card.setProperty('collapsed', collapsed)
+            self.logo_card.style().unpolish(self.logo_card)
+            self.logo_card.style().polish(self.logo_card)
+        if hasattr(self, 'feature_group_label'):
+            self.feature_group_label.setVisible(not collapsed)
         self.tools_group_label.setVisible(not collapsed)
         for button in self.nav_buttons.values():
             button.setProperty('collapsed', collapsed)
-            icon = button.property('nav_icon') or ''
             title = button.property('nav_title') or ''
             if collapsed:
                 button.setText('')
                 button.setToolTip(title)
             else:
                 button.setText(title)
-                button.setToolTip('')
+                button.setToolTip('설정 및 작업 공간 관리 (Ctrl+,)' if button.property('nav_icon') == 'settings' else '')
             button.style().unpolish(button)
             button.style().polish(button)
         for tool_definition, button in zip(self.tool_definitions, self.sidebar_buttons):
             button.setProperty('collapsed', collapsed)
-            icon = tool_definition.get('icon', '📄')
             title = tool_definition['menu_title']
-            if collapsed:
+            subtitle = tool_definition.get('menu_subtitle', '')
+            is_featured = bool(tool_definition.get('featured'))
+            if is_featured and hasattr(button, '_feature_title_label'):
                 button.setText('')
-                button.setToolTip(title)
-                button.setMinimumHeight(40 if self.sidebar_compact else 50)
-                button.setMaximumHeight(40 if self.sidebar_compact else 50)
+                button._feature_title_label.setVisible(not collapsed)
+                button._feature_desc_label.setVisible(not collapsed)
+                button._feature_icon_label.setVisible(not collapsed)
+                if collapsed:
+                    button.setToolTip(f'{title} — {subtitle}' if subtitle else title)
+                    button.setMinimumHeight(40)
+                    button.setMaximumHeight(40)
+                else:
+                    button.setToolTip(tool_definition.get('window_title', ''))
+                    button.setMinimumHeight(46)
+                    button.setMaximumHeight(52)
             else:
-                button.setText(title)
-                button.setToolTip('')
-                button.setMinimumHeight(0)
-                button.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX
+                if collapsed:
+                    button.setText('')
+                    button.setToolTip(title)
+                    button.setMinimumHeight(40 if self.sidebar_compact else 50)
+                    button.setMaximumHeight(40 if self.sidebar_compact else 50)
+                else:
+                    button.setText(title)
+                    button.setToolTip('')
+                    button.setMinimumHeight(0)
+                    button.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX
             button.style().unpolish(button)
             button.style().polish(button)
         self.refresh_sidebar_icons()
 
+    def _create_feature_sidebar_button(self, tool_definition):
+        title = tool_definition['menu_title']
+        subtitle = tool_definition.get('menu_subtitle', '')
+        button = QPushButton()
+        button.setObjectName('sidebarFeatureBtn')
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setEnabled(tool_definition['enabled'])
+        button.setProperty('active', False)
+        button.setProperty('featured', True)
+        button.setProperty('nav_icon', tool_definition['key'])
+        button.setProperty('nav_title', title)
+        button.setProperty('nav_subtitle', subtitle)
+        lay = QHBoxLayout(button)
+        lay.setContentsMargins(8, 6, 8, 6)
+        lay.setSpacing(8)
+        icon_lbl = QLabel()
+        icon_lbl.setObjectName('sidebarFeatureIcon')
+        icon_lbl.setFixedSize(28, 28)
+        icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        text_col = QVBoxLayout()
+        text_col.setContentsMargins(0, 0, 0, 0)
+        text_col.setSpacing(1)
+        title_lbl = QLabel(title)
+        title_lbl.setObjectName('sidebarFeatureTitle')
+        title_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        desc_lbl = QLabel(subtitle)
+        desc_lbl.setObjectName('sidebarFeatureDesc')
+        desc_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        text_col.addWidget(title_lbl)
+        text_col.addWidget(desc_lbl)
+        lay.addWidget(icon_lbl, 0, Qt.AlignmentFlag.AlignVCenter)
+        lay.addLayout(text_col, 1)
+        button._feature_icon_label = icon_lbl
+        button._feature_title_label = title_lbl
+        button._feature_desc_label = desc_lbl
+        return button
+
     def populate_sidebar_buttons(self):
-        while self.sidebar_button_host.count():
-            item = self.sidebar_button_host.takeAt(0)
-            widget = item.widget()
-            if widget:
-                widget.deleteLater()
+        for host in (self.feature_button_host, self.sidebar_button_host):
+            while host.count():
+                item = host.takeAt(0)
+                widget = item.widget()
+                if widget:
+                    widget.deleteLater()
         self.sidebar_buttons = []
         for tool_definition in self.tool_definitions:
-            icon = tool_definition.get('icon', '📄')
-            title = tool_definition['menu_title']
-            button = QPushButton(title)
-            button.setObjectName('sidebarBtn')
-            button.setEnabled(tool_definition['enabled'])
-            button.setProperty('active', False)
-            button.setProperty('nav_icon', icon)
-            button.setProperty('nav_title', title)
+            is_featured = bool(tool_definition.get('featured'))
+            if is_featured:
+                button = self._create_feature_sidebar_button(tool_definition)
+                host = self.feature_button_host
+            else:
+                icon = tool_definition.get('icon', '📄')
+                title = tool_definition['menu_title']
+                button = QPushButton(title)
+                button.setObjectName('sidebarBtn')
+                button.setCursor(Qt.CursorShape.PointingHandCursor)
+                button.setEnabled(tool_definition['enabled'])
+                button.setProperty('active', False)
+                button.setProperty('featured', False)
+                button.setProperty('nav_icon', icon)
+                button.setProperty('nav_title', title)
+                host = self.sidebar_button_host
             if tool_definition['enabled']:
                 button.clicked.connect(partial(self.open_tool, tool_definition['key']))
-            self.sidebar_button_host.addWidget(button)
+            host.addWidget(button)
             self.sidebar_buttons.append(button)
         self.apply_sidebar_collapsed_state(self.sidebar_width < self.sidebar_expanded_width)
 
     def set_active_sidebar_button(self, tool_key):
         for tool_definition, button in zip(self.tool_definitions, self.sidebar_buttons):
-            button.setProperty('active', tool_definition['key'] == tool_key)
+            is_active = tool_definition['key'] == tool_key
+            button.setProperty('active', is_active)
             button.style().unpolish(button)
             button.style().polish(button)
+            title_lbl = getattr(button, '_feature_title_label', None)
+            if title_lbl is not None:
+                title_lbl.setProperty('active', is_active)
+                title_lbl.style().unpolish(title_lbl)
+                title_lbl.style().polish(title_lbl)
         self._set_active_nav(None if tool_key else self._active_view_key())
 
         # Show/hide legend caution button based on active tool
@@ -557,21 +673,25 @@ class MdiMainWindow(QMainWindow):
             {
                 'key': 'pdf_compare',
                 'menu_title': '영역지정비교',
+                'menu_subtitle': '지정 영역 비교',
                 'window_title': 'PDF 지정 영역 비교',
                 'module_path': 'app.tools.pdf_compare',
                 'class_name': 'PdfCompareWidget',
                 'singleton': True,
                 'enabled': True,
+                'featured': True,
                 'icon': '🔍',
             },
             {
                 'key': 'pdf_hf_compare',
                 'menu_title': '전체비교',
+                'menu_subtitle': '페이지 전체 비교',
                 'window_title': 'PDF 전체 비교',
                 'module_path': 'app.tools.pdf_header_footer_compare',
                 'class_name': 'HFCompareWidget',
                 'singleton': True,
                 'enabled': True,
+                'featured': True,
                 'icon': '📑',
             },
             {
@@ -1019,9 +1139,18 @@ class MdiMainWindow(QMainWindow):
     # drag & drop -----------------------------------------------------
     def dragEnterEvent(self, event):
         if any(u.toLocalFile().lower().endswith('.pdf') for u in event.mimeData().urls()):
+            if self.mode_stack.currentWidget() is self.welcome_page:
+                self.welcome_page._set_drag_active(True)
             event.acceptProposedAction()
 
+    def dragLeaveEvent(self, event):
+        if hasattr(self, 'welcome_page'):
+            self.welcome_page._set_drag_active(False)
+        super().dragLeaveEvent(event)
+
     def dropEvent(self, event):
+        if hasattr(self, 'welcome_page'):
+            self.welcome_page._set_drag_active(False)
         if self.current_tool_widget is not None:
             return  # existing tools handle their own drops
         for u in event.mimeData().urls():

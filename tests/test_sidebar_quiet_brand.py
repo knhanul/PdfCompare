@@ -11,6 +11,10 @@ def test_active_sidebar_is_soft_tint_with_left_bar_for_all_themes():
         assert 'border-left: 2px solid' in rule
         assert THEMES[tid]['sidebar_active_bg'] in rule
         assert 'on_accent' not in rule
+        feat_rule = qss[qss.index("QPushButton#sidebarFeatureBtn"):].split('}')[0]
+        assert THEMES[tid]['feature_bg'] in feat_rule
+        assert THEMES[tid]['feature_border'] in feat_rule
+        assert 'border-left: 3px solid' in feat_rule
 
 
 def test_default_matches_quiet_brand_tokens():

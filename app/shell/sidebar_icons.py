@@ -23,14 +23,29 @@ def _split(p):
 
 
 def _compare(p):
-    p.drawEllipse(QRectF(3, 3, 10, 10))
-    p.drawLine(QPointF(11.5, 11.5), QPointF(17, 17))
+    """Area selection compare: dashed selection rectangle with corner handles."""
+    pen = QPen(p.pen())
+    dash_pen = QPen(pen)
+    dash_pen.setStyle(Qt.PenStyle.DashLine)
+    dash_pen.setDashPattern([2.2, 2.0])
+    p.setPen(dash_pen)
+    p.drawRoundedRect(QRectF(3.5, 4.0, 13.0, 12.0), 1.5, 1.5)
+    p.setPen(pen)
+    p.drawPolyline([QPointF(2.5, 6.5), QPointF(2.5, 3.0), QPointF(6.0, 3.0)])
+    p.drawPolyline([QPointF(14.0, 3.0), QPointF(17.5, 3.0), QPointF(17.5, 6.5)])
+    p.drawPolyline([QPointF(2.5, 13.5), QPointF(2.5, 17.0), QPointF(6.0, 17.0)])
+    p.drawPolyline([QPointF(14.0, 17.0), QPointF(17.5, 17.0), QPointF(17.5, 13.5)])
+    p.drawLine(QPointF(6.5, 8.5), QPointF(13.5, 8.5))
+    p.drawLine(QPointF(6.5, 11.5), QPointF(11.5, 11.5))
 
 
 def _header(p):
-    _doc(p)
-    p.drawLine(QPointF(7, 9), QPointF(13, 9))
-    p.drawLine(QPointF(7, 14), QPointF(13, 14))
+    """Full document compare: two side-by-side pages with comparison lines."""
+    p.drawRoundedRect(QRectF(2.2, 3.5, 6.8, 13.0), 1.2, 1.2)
+    p.drawRoundedRect(QRectF(11.0, 3.5, 6.8, 13.0), 1.2, 1.2)
+    for y in (7.0, 10.0, 13.0):
+        p.drawLine(QPointF(4.0, y), QPointF(7.2, y))
+        p.drawLine(QPointF(12.8, y), QPointF(16.0, y))
 
 
 def _edit(p):
@@ -128,8 +143,8 @@ def brand_mark(color='#A44735', size=28):
     return pm
 
 
-def official_brand_pixmap(size=32, light_pad=False):
-    """Official 기관문양 from assets; never recolor. Optional light pad for dark chrome."""
+def official_brand_pixmap(size=32, light_pad=False, pad_bg='#FFFFFF', pad_border=None):
+    """Official 기관문양 from assets; never recolor. Optional neutral pad container."""
     from app.common.resources import get_logo_path
     path = get_logo_path()
     if not path:
@@ -137,23 +152,32 @@ def official_brand_pixmap(size=32, light_pad=False):
     src = QPixmap(path)
     if src.isNull():
         return None
-    margin = 3 if light_pad else 0
-    inner = max(8, size - 2 * margin)
+    scale = 2
+    px_size = size * scale
+    margin = (3 if light_pad else 2) * scale
+    inner = max(16, px_size - 2 * margin)
     scaled = src.scaled(
         inner, inner,
         Qt.AspectRatioMode.KeepAspectRatio,
         Qt.TransformationMode.SmoothTransformation,
     )
-    out = QPixmap(size, size)
+    out = QPixmap(px_size, px_size)
     out.fill(Qt.GlobalColor.transparent)
     p = QPainter(out)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    if light_pad:
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor('#FFFFFF'))
-        p.drawRoundedRect(QRectF(0, 0, size, size), 6, 6)
-    x = (size - scaled.width()) // 2
-    y = (size - scaled.height()) // 2
+    if light_pad or pad_bg:
+        if pad_border:
+            pen = QPen(QColor(pad_border), 1.0 * scale)
+            p.setPen(pen)
+        else:
+            p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(pad_bg or '#FFFFFF'))
+        r = 7.0 * scale
+        inset = 0.5 * scale if pad_border else 0.0
+        p.drawRoundedRect(QRectF(inset, inset, px_size - 2 * inset, px_size - 2 * inset), r, r)
+    x = (px_size - scaled.width()) // 2
+    y = (px_size - scaled.height()) // 2
     p.drawPixmap(x, y, scaled)
     p.end()
+    out.setDevicePixelRatio(scale)
     return out
