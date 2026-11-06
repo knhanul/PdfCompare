@@ -95,3 +95,79 @@ def test_saved_theme_used_at_startup(theme_env, theme_id):
         w.close()
         w.deleteLater()
         theme_env.processEvents()
+
+
+@pytest.mark.parametrize('theme_id', [t for t in THEMES if t != 'default'])
+def test_non_default_themes_style_all_screen_buttons_and_grid_headers(theme_env, theme_id):
+    from PyQt6.QtGui import QPalette
+    from PyQt6.QtWidgets import QPushButton
+    from app.main_window import MdiMainWindow
+    from app.services import app_settings
+    from app.shell.theme import header_section_qss, tool_table_qss
+
+    app_settings.set('ui/theme', 'default')
+    w = MdiMainWindow()
+    try:
+        w.show()
+        # Verify default theme does not inject non-default button chrome overrides
+        default_qss = build_shell_qss('default')
+        assert 'QPushButton#compareActionBtn' not in default_qss
+        assert 'QPushButton#pdfOpenButton' not in default_qss
+
+        # Open tools and switch to non-default theme live
+        app_settings.set('ui/theme', theme_id)
+        w.apply_settings('ui/theme')
+        theme_env.processEvents()
+
+        tokens = theme_tokens(theme_id)
+        qss = build_shell_qss(theme_id)
+        for selector in (
+            'QPushButton#actionBtn',
+            'QPushButton#compareActionBtn',
+            'QPushButton#pdfOpenButton',
+            'QPushButton#secondaryBtn',
+            'QPushButton#compareUtilityBtn',
+            'QPushButton#toolbarBtn',
+            'QPushButton#viewerToolBtn',
+            'QPushButton#toolToggleBtn',
+            'QHeaderView::section',
+        ):
+            assert selector in qss
+
+        for tool_key in ('pdf_compare', 'pdf_hf_compare', 'pdf_editor', 'pdf_create', 'file_rename', 'pdf_form'):
+            w.open_tool(tool_key)
+            theme_env.processEvents()
+            tool = w.current_tool_widget
+            assert tool is not None
+
+            # Check action/primary buttons use theme accent background
+            for obj_name in ('actionBtn', 'compareActionBtn', 'pdfOpenButton', 'compareBtn'):
+                for btn in tool.findChildren(QPushButton, obj_name):
+                    if btn.isEnabled():
+                        assert btn.palette().color(QPalette.ColorRole.Button).name().upper() == tokens['accent']
+
+            # Check secondary/toolbar/utility buttons use theme panel_bg and accent colors
+            for obj_name in ('secondaryBtn', 'compareUtilityBtn', 'toolbarBtn'):
+                for btn in tool.findChildren(QPushButton, obj_name):
+                    if btn.isEnabled():
+                        assert btn.palette().color(QPalette.ColorRole.Button).name().upper() == tokens['panel_bg']
+                        assert btn.palette().color(QPalette.ColorRole.ButtonText).name().upper() == tokens['accent']
+
+            # Check grid tables and headers have theme colors applied
+            tables = []
+            if hasattr(tool, 'file_table'):
+                tables.append(tool.file_table)
+            if hasattr(tool, 'extract_table'):
+                tables.extend([tool.extract_table, tool.import_table, tool.creator_panel.field_table])
+            for table in tables:
+                hdr = table.horizontalHeader()
+                assert hdr.palette().color(QPalette.ColorRole.Window).name().upper() == tokens['accent']
+                assert 'QHeaderView::section' in table.styleSheet()
+                assert tokens['accent'] in table.styleSheet()
+                assert tokens['accent_hover'] in table.styleSheet()
+                assert tokens['border'] in table.styleSheet()
+    finally:
+        w.close()
+        w.deleteLater()
+        theme_env.processEvents()
+

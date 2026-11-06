@@ -37,40 +37,88 @@ class ToolSwitchToggle(QFrame):
             self._group.addButton(button, index)
             self.buttons.append(button)
 
-        self.setStyleSheet("""
-            QFrame#toolToggle {
-                background-color: #E7E2DE;
-                border: 1px solid #D5CEC8;
+        self.apply_theme()
+
+    def apply_theme(self, theme_id=None):
+        """현재 테마에 맞춰 세그먼트 토글 색상을 갱신한다 (기본 테마는 기존 스타일 유지)."""
+        from app.services import app_settings
+        from app.shell.theme import THEMES, theme_tokens
+
+        if theme_id is None:
+            theme_id = app_settings.get("ui/theme")
+        if theme_id not in THEMES or theme_id == "default":
+            self.setStyleSheet("""
+                QFrame#toolToggle {
+                    background-color: #E7E2DE;
+                    border: 1px solid #D5CEC8;
+                    border-radius: 12px;
+                }
+                QLabel#toolToggleCaption {
+                    color: #8E4235;
+                    font-size: 11px;
+                    font-weight: 700;
+                    padding: 0 4px 0 6px;
+                    background: transparent;
+                }
+                QFrame#toolToggle QPushButton#toolToggleBtn {
+                    background-color: transparent;
+                    border: none;
+                    border-radius: 8px;
+                    color: #6B6562;
+                    font-size: 12px;
+                    font-weight: 500;
+                    padding: 4px 12px;
+                    min-height: 22px;
+                }
+                QFrame#toolToggle QPushButton#toolToggleBtn:hover {
+                    background-color: rgba(164, 71, 53, 0.08);
+                    color: #343434;
+                }
+                QFrame#toolToggle QPushButton#toolToggleBtn:checked {
+                    background-color: #A44735;
+                    color: #FFFFFF;
+                    font-weight: 700;
+                }
+            """)
+            return
+
+        tokens = theme_tokens(theme_id)
+        on_accent = "#202124" if theme_id in ("energy", "black") else "#FFFFFF"
+        self.setStyleSheet(f"""
+            QFrame#toolToggle {{
+                background-color: {tokens['sidebar_bg']};
+                border: 1px solid {tokens['border']};
                 border-radius: 12px;
-            }
-            QLabel#toolToggleCaption {
-                color: #8E4235;
+            }}
+            QLabel#toolToggleCaption {{
+                color: {tokens['accent']};
                 font-size: 11px;
                 font-weight: 700;
                 padding: 0 4px 0 6px;
                 background: transparent;
-            }
-            QFrame#toolToggle QPushButton#toolToggleBtn {
+            }}
+            QFrame#toolToggle QPushButton#toolToggleBtn {{
                 background-color: transparent;
                 border: none;
                 border-radius: 8px;
-                color: #6B6562;
+                color: {tokens['text_muted']};
                 font-size: 12px;
                 font-weight: 500;
                 padding: 4px 12px;
                 min-height: 22px;
-            }
-            QFrame#toolToggle QPushButton#toolToggleBtn:hover {
-                background-color: rgba(164, 71, 53, 0.08);
-                color: #343434;
-            }
-            QFrame#toolToggle QPushButton#toolToggleBtn:checked {
-                background-color: #A44735;
-                color: #FFFFFF;
+            }}
+            QFrame#toolToggle QPushButton#toolToggleBtn:hover {{
+                background-color: {tokens['hover']};
+                color: {tokens['text']};
+            }}
+            QFrame#toolToggle QPushButton#toolToggleBtn:checked {{
+                background-color: {tokens['accent']};
+                color: {on_accent};
                 font-weight: 700;
-            }
+            }}
         """)
 
     def set_active(self, index):
         """활성 세그먼트 표시 (시그널 발생 없음)."""
         self.buttons[index].setChecked(True)
+

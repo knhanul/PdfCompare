@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
 from app.common.file_names import build_new_name, direct_name, unique_name
 from app.common.loading_dialog import note_progress, style_task_progress
 from app.services import app_settings
-from app.shell.theme import header_section_qss
+from app.shell.theme import THEMES, build_shell_qss, header_section_qss, theme_tokens, tool_table_qss
 from app.common.styles import COLOR_BORDER, COLOR_PRIMARY, COLOR_TEXT_MUTED, COLOR_TEXT_PRIMARY, MODERN_QSS
 from app.common.user_prefs import load_dir, save_dir
 
@@ -72,7 +72,7 @@ class FileRenameWidget(QWidget):
 
     def __init__(self, parent=None, comparison_settings=None):
         super().__init__(parent)
-        self.setStyleSheet(MODERN_QSS)
+        self.setStyleSheet(MODERN_QSS + build_shell_qss(app_settings.get('ui/theme')))
         self.setAcceptDrops(True)
         self.output_dir = ""
         self.paths = []
@@ -129,6 +129,7 @@ class FileRenameWidget(QWidget):
 
         rules = QWidget()
         rules.setObjectName("rulePane")
+        self.rules_pane = rules
         rules_layout = QVBoxLayout(rules)
         rules_layout.setContentsMargins(2, 0, 8, 8)
         rules_layout.setSpacing(10)
@@ -254,68 +255,12 @@ class FileRenameWidget(QWidget):
         self.history_list.setMinimumHeight(96)
         self.history_list.itemDoubleClicked.connect(self.open_history_item)
         right_layout.addWidget(self.history_list)
-        rules.setStyleSheet(f"""
-            QWidget#rulePane {{
-                background: transparent;
-            }}
-            QLabel#ruleHint {{
-                color: {COLOR_TEXT_MUTED};
-                font-size: 12px;
-            }}
-            QFrame#ruleCard {{
-                background: white;
-                border: 1px solid #FFD4A8;
-                border-radius: 12px;
-            }}
-            QLabel#stepBadge {{
-                background: {COLOR_PRIMARY};
-                color: white;
-                border-radius: 11px;
-                font-size: 11px;
-                font-weight: 700;
-            }}
-            QLabel#ruleTitle {{
-                font-size: 14px;
-                font-weight: 700;
-            }}
-            QLabel#fieldLabel {{
-                color: {COLOR_TEXT_MUTED};
-                font-size: 11px;
-                font-weight: 600;
-            }}
-            QFrame#segmentBar {{
-                background: #F2F2F7;
-                border-radius: 8px;
-            }}
-            QRadioButton#segment {{
-                background: transparent;
-                color: {COLOR_TEXT_PRIMARY};
-                border: none;
-                border-radius: 8px;
-                padding: 5px 14px;
-                spacing: 0px;
-            }}
-            QRadioButton#segment::indicator {{
-                width: 0px;
-                height: 0px;
-            }}
-            QRadioButton#segment:checked {{
-                background: {COLOR_PRIMARY};
-                color: white;
-            }}
-            QRadioButton#segment:checked:disabled {{
-                background: #E5E5EA;
-                color: {COLOR_TEXT_MUTED};
-            }}
-            QRadioButton#segment:disabled {{
-                color: {COLOR_TEXT_MUTED};
-            }}
-        """)
         splitter.addWidget(right)
         splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 2)
         root.addWidget(splitter, 1)
         self._create_bottom_bar(root)
+        self._style_table()
 
         for widget in (self.find_edit, self.replace_edit, self.delete_edit, self.prefix_edit, self.suffix_edit):
             widget.textChanged.connect(self.refresh_preview)
@@ -379,26 +324,44 @@ class FileRenameWidget(QWidget):
             widget.setEnabled(checked)
 
     def _style_table(self):
-        header = header_section_qss(app_settings.get('ui/theme'))
-        self.file_table.setStyleSheet(f"""
-            QTableWidget {{
-                background: white;
-                border: 1px solid {COLOR_BORDER};
-                outline: none;
-                selection-background-color: transparent;
-                selection-color: {COLOR_TEXT_PRIMARY};
-            }}
-            {header}
-            QCheckBox::indicator {{
-                width: 18px; height: 18px; border: 1.5px solid #C6C6C8; border-radius: 5px; background: white;
-            }}
-            QCheckBox::indicator:checked {{
-                background: {COLOR_PRIMARY}; border: 1.5px solid {COLOR_PRIMARY};
-            }}
-            QCheckBox::indicator:indeterminate {{
-                background: rgba(255, 107, 0, 0.35); border: 1.5px solid {COLOR_PRIMARY};
-            }}
-        """)
+        theme_id = app_settings.get('ui/theme')
+        self.setStyleSheet(MODERN_QSS + build_shell_qss(theme_id))
+        self.file_table.setStyleSheet(tool_table_qss(theme_id, selectable=False))
+        if hasattr(self, 'rules_pane'):
+            if theme_id not in THEMES or theme_id == 'default':
+                self.rules_pane.setStyleSheet(f"""
+                    QWidget#rulePane {{ background: transparent; }}
+                    QLabel#ruleHint {{ color: {COLOR_TEXT_MUTED}; font-size: 12px; }}
+                    QFrame#ruleCard {{ background: white; border: 1px solid #FFD4A8; border-radius: 12px; }}
+                    QLabel#stepBadge {{ background: {COLOR_PRIMARY}; color: white; border-radius: 11px; font-size: 11px; font-weight: 700; }}
+                    QLabel#ruleTitle {{ font-size: 14px; font-weight: 700; }}
+                    QLabel#fieldLabel {{ color: {COLOR_TEXT_MUTED}; font-size: 11px; font-weight: 600; }}
+                    QFrame#segmentBar {{ background: #F2F2F7; border-radius: 8px; }}
+                    QRadioButton#segment {{ background: transparent; color: {COLOR_TEXT_PRIMARY}; border: none; border-radius: 8px; padding: 5px 14px; spacing: 0px; }}
+                    QRadioButton#segment::indicator {{ width: 0px; height: 0px; }}
+                    QRadioButton#segment:checked {{ background: {COLOR_PRIMARY}; color: white; }}
+                    QRadioButton#segment:checked:disabled {{ background: #E5E5EA; color: {COLOR_TEXT_MUTED}; }}
+                    QRadioButton#segment:disabled {{ color: {COLOR_TEXT_MUTED}; }}
+                """)
+            else:
+                tokens = theme_tokens(theme_id)
+                on_accent = '#202124' if theme_id in ('energy', 'black') else '#FFFFFF'
+                self.rules_pane.setStyleSheet(f"""
+                    QWidget#rulePane {{ background: transparent; }}
+                    QLabel#ruleHint {{ color: {tokens['text_muted']}; font-size: 12px; }}
+                    QFrame#ruleCard {{ background: {tokens['panel_bg']}; border: 1px solid {tokens['border']}; border-radius: 12px; }}
+                    QLabel#stepBadge {{ background: {tokens['accent']}; color: {on_accent}; border-radius: 11px; font-size: 11px; font-weight: 700; }}
+                    QLabel#ruleTitle {{ color: {tokens['text']}; font-size: 14px; font-weight: 700; }}
+                    QLabel#fieldLabel {{ color: {tokens['text_muted']}; font-size: 11px; font-weight: 600; }}
+                    QFrame#segmentBar {{ background: {tokens['sidebar_bg']}; border: 1px solid {tokens['border']}; border-radius: 8px; }}
+                    QRadioButton#segment {{ background: transparent; color: {tokens['text']}; border: none; border-radius: 8px; padding: 5px 14px; spacing: 0px; }}
+                    QRadioButton#segment::indicator {{ width: 0px; height: 0px; }}
+                    QRadioButton#segment:checked {{ background: {tokens['accent']}; color: {on_accent}; font-weight: 600; }}
+                    QRadioButton#segment:checked:disabled {{ background: {tokens['sidebar_bg']}; color: {tokens['text_muted']}; }}
+                    QRadioButton#segment:disabled {{ color: {tokens['text_muted']}; }}
+                """)
+        if hasattr(self, 'progress'):
+            style_task_progress(self.progress)
 
     def _create_bottom_bar(self, parent_layout):
         bar = QFrame()

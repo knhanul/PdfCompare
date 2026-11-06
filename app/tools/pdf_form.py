@@ -26,6 +26,8 @@ from PyQt6.QtWidgets import (
 )
 
 from app.common.styles import COLOR_BORDER, COLOR_PRIMARY, MODERN_QSS
+from app.services import app_settings
+from app.shell.theme import THEMES, build_shell_qss, theme_tokens, tool_table_qss
 from app.common.pdf_form.field_models import (
     FIELD_TYPE_LABELS,
     FormError,
@@ -68,7 +70,7 @@ class PdfFormWidget(QWidget):
     def __init__(self, parent=None, comparison_settings=None):
         super().__init__(parent)
         self.comparison_settings = comparison_settings
-        self.setStyleSheet(MODERN_QSS)
+        self.setStyleSheet(MODERN_QSS + build_shell_qss(app_settings.get('ui/theme')))
         self.setAcceptDrops(True)
 
         self.session: FormDocumentSession | None = None
@@ -76,13 +78,15 @@ class PdfFormWidget(QWidget):
         self._imported_data: dict[str, object] = {}
         self._manual_mapping: dict[str, str | None] = {}
         self._current_analysis: ImportAnalysis | None = None
+        self._step_cards: list[tuple[QFrame, QLabel, str, QLabel]] = []
 
         root = QVBoxLayout(self)
         root.setContentsMargins(14, 10, 14, 10)
         root.setSpacing(8)
 
         # 1. 상단 제목 & 파일 정보 바
-        root.addWidget(self._build_top_header())
+        self.top_header_bar = self._build_top_header()
+        root.addWidget(self.top_header_bar)
 
         # 2. 제한/경고 배너 (XFA, 서명, 권한 제한 시 표시)
         self.banner_restriction = QLabel("")
@@ -115,12 +119,71 @@ class PdfFormWidget(QWidget):
         self.btn_focus_mode.setCheckable(True)
         self.btn_focus_mode.hide()
 
+        self._style_file_table()
         self._update_top_info()
+
+    def _style_file_table(self):
+        theme_id = app_settings.get("ui/theme")
+        self.setStyleSheet(MODERN_QSS + build_shell_qss(theme_id))
+        table_qss = tool_table_qss(theme_id, selectable=True)
+        for tbl in (
+            getattr(self.creator_panel, "field_table", None) if hasattr(self, "creator_panel") else None,
+            getattr(self, "extract_table", None),
+            getattr(self, "import_table", None),
+        ):
+            if tbl is not None:
+                tbl.setStyleSheet(table_qss)
+
+        if theme_id not in THEMES or theme_id == "default":
+            if hasattr(self, "top_header_bar"):
+                self.top_header_bar.setStyleSheet(
+                    "QFrame#formTopHeader { background-color: #FCFAF7; border: 1px solid #E5E0DA; border-radius: 10px; }"
+                )
+            if hasattr(self, "welcome_view"):
+                self.welcome_view.setStyleSheet(
+                    "QFrame#formWelcomeView { background-color: #FFFFFF; border: 1px solid #E5E0DA; border-radius: 12px; }"
+                )
+            if hasattr(self, "welcome_headline"):
+                self.welcome_headline.setStyleSheet("font-size: 22px; font-weight: 700; color: #2C2A29; border: none;")
+            if hasattr(self, "welcome_sub"):
+                self.welcome_sub.setStyleSheet("font-size: 13px; color: #5C5652; border: none;")
+            for card, t_lbl, step_title, d_lbl in self._step_cards:
+                card.setStyleSheet(
+                    "QFrame { background-color: #FAF8F5; border: 1px solid #E4DED7; border-radius: 10px; padding: 14px; }"
+                )
+                t_lbl.setText(f"<b style='font-size:14px; color:#A63F2B;'>{step_title}</b>")
+                d_lbl.setStyleSheet("color: #4A4542; font-size: 12px; border: none;")
+        else:
+            tokens = theme_tokens(theme_id)
+            if hasattr(self, "top_header_bar"):
+                self.top_header_bar.setStyleSheet(
+                    f"QFrame#formTopHeader {{ background-color: {tokens['panel_bg']}; border: 1px solid {tokens['border']}; border-radius: 10px; }}"
+                )
+            if hasattr(self, "welcome_view"):
+                self.welcome_view.setStyleSheet(
+                    f"QFrame#formWelcomeView {{ background-color: {tokens['panel_bg']}; border: 1px solid {tokens['border']}; border-radius: 12px; }}"
+                )
+            if hasattr(self, "welcome_headline"):
+                self.welcome_headline.setStyleSheet(f"font-size: 22px; font-weight: 700; color: {tokens['text']}; border: none;")
+            if hasattr(self, "welcome_sub"):
+                self.welcome_sub.setStyleSheet(f"font-size: 13px; color: {tokens['text_muted']}; border: none;")
+            for card, t_lbl, step_title, d_lbl in self._step_cards:
+                card.setStyleSheet(
+                    f"QFrame {{ background-color: {tokens['app_bg']}; border: 1px solid {tokens['border']}; border-radius: 10px; padding: 14px; }}"
+                )
+                t_lbl.setText(f"<b style='font-size:14px; color:{tokens['accent']};'>{step_title}</b>")
+                d_lbl.setStyleSheet(f"color: {tokens['text']}; font-size: 12px; border: none;")
+
+        if hasattr(self, "filler_panel"):
+            self.filler_panel.apply_theme(theme_id)
+
+    _style_table = _style_file_table
 
     def _build_top_header(self) -> QFrame:
         bar = QFrame()
+        bar.setObjectName("formTopHeader")
         bar.setStyleSheet(
-            "QFrame { background-color: #FCFAF7; border: 1px solid #E5E0DA; border-radius: 10px; }"
+            "QFrame#formTopHeader { background-color: #FCFAF7; border: 1px solid #E5E0DA; border-radius: 10px; }"
         )
         lay = QVBoxLayout(bar)
         lay.setContentsMargins(14, 10, 14, 10)
@@ -128,8 +191,8 @@ class PdfFormWidget(QWidget):
 
         title_row = QHBoxLayout()
         lbl_title = QLabel(
-            "<span style='font-size:15px; font-weight:700; color:#2C2A29;'>PDF 입력폼 관리</span>  "
-            "<span style='font-size:12px; color:#6E6863;'>"
+            "<span style='font-size:15px; font-weight:700;'>PDF 입력폼 관리</span>  "
+            "<span style='font-size:12px;'>"
             "일반 PDF에 입력란을 만들거나, 만들어진 양식을 작성하고 데이터를 관리할 수 있습니다.</span>"
         )
         lbl_title.setStyleSheet("border: none;")
@@ -147,10 +210,9 @@ class PdfFormWidget(QWidget):
         self.btn_open_sample.clicked.connect(self.open_sample_form)
 
         self.lbl_file_name = QLabel("열린 파일 없음")
-        self.lbl_file_name.setStyleSheet("color: #2C2A29; font-weight: 600;")
+        self.lbl_file_name.setStyleSheet("font-weight: 600;")
 
         self.lbl_doc_stats = QLabel("페이지 - · 입력란 -")
-        self.lbl_doc_stats.setStyleSheet("color: #6B6560;")
 
         self.lbl_dirty_badge = QLabel("저장됨")
         self.lbl_dirty_badge.setStyleSheet(
@@ -176,8 +238,9 @@ class PdfFormWidget(QWidget):
 
     def _build_welcome_view(self) -> QWidget:
         w = QFrame()
+        w.setObjectName("formWelcomeView")
         w.setStyleSheet(
-            "QFrame { background-color: #FFFFFF; border: 1px solid #E5E0DA; border-radius: 12px; }"
+            "QFrame#formWelcomeView { background-color: #FFFFFF; border: 1px solid #E5E0DA; border-radius: 12px; }"
         )
         outer = QVBoxLayout(w)
         outer.setContentsMargins(36, 32, 36, 32)
@@ -187,6 +250,7 @@ class PdfFormWidget(QWidget):
         headline = QLabel("PDF 입력폼 관리로 문서 작업을 더 간편하게")
         headline.setAlignment(Qt.AlignmentFlag.AlignCenter)
         headline.setStyleSheet("font-size: 22px; font-weight: 700; color: #2C2A29; border: none;")
+        self.welcome_headline = headline
         outer.addWidget(headline)
 
         sub = QLabel(
@@ -195,6 +259,7 @@ class PdfFormWidget(QWidget):
         )
         sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         sub.setStyleSheet("font-size: 13px; color: #5C5652; border: none;")
+        self.welcome_sub = sub
         outer.addWidget(sub)
 
         cards_row = QHBoxLayout()
@@ -219,6 +284,7 @@ class PdfFormWidget(QWidget):
             clay.addWidget(t_lbl)
             clay.addWidget(d_lbl)
             cards_row.addWidget(card, 1)
+            self._step_cards.append((card, t_lbl, step_title, d_lbl))
         outer.addLayout(cards_row)
 
         btns_row = QHBoxLayout()

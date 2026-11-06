@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
 )
 
 from app.services import app_settings
-from app.shell.theme import header_section_qss
+from app.shell.theme import THEMES, build_shell_qss, header_section_qss, theme_tokens, tool_table_qss
 from app.common.styles import (
     COLOR_BORDER, COLOR_PRIMARY, COLOR_TEXT_PRIMARY, MODERN_QSS,
 )
@@ -37,7 +37,7 @@ class PdfEditorWidget(QWidget):
 
     def __init__(self, parent=None, comparison_settings=None):
         super().__init__(parent)
-        self.setStyleSheet(MODERN_QSS)
+        self.setStyleSheet(MODERN_QSS + build_shell_qss(app_settings.get('ui/theme')))
         self.setAcceptDrops(True)
 
         self.docs = []
@@ -232,6 +232,8 @@ class PdfEditorWidget(QWidget):
         root.addWidget(splitter, 1)
 
         self._create_bottom_bar(root)
+        self._style_file_table()
+
 
     def _create_bottom_bar(self, parent_layout):
         bar = QFrame()
@@ -352,38 +354,25 @@ class PdfEditorWidget(QWidget):
             self._load_files(paths)
 
     def _style_file_table(self):
-        header = header_section_qss(app_settings.get('ui/theme'))
-        self.file_table.setStyleSheet(f"""
-            QTableWidget {{
-                background: white;
-                border: 1px solid {COLOR_BORDER};
-                outline: none;
-            }}
-            QTableWidget::item {{
-                border: none;
-                padding: 2px 4px;
-            }}
-            QTableWidget::item:selected {{
-                background-color: #FFF8F2;
-                color: {COLOR_TEXT_PRIMARY};
-            }}
-            {header}
-            QCheckBox::indicator {{
-                width: 18px;
-                height: 18px;
-                border: 1.5px solid #C6C6C8;
-                border-radius: 5px;
-                background: white;
-            }}
-            QCheckBox::indicator:checked {{
-                background: {COLOR_PRIMARY};
-                border: 1.5px solid {COLOR_PRIMARY};
-            }}
-            QCheckBox::indicator:indeterminate {{
-                background: rgba(255, 107, 0, 0.35);
-                border: 1.5px solid {COLOR_PRIMARY};
-            }}
-        """)
+        theme_id = app_settings.get('ui/theme')
+        self.setStyleSheet(MODERN_QSS + build_shell_qss(theme_id))
+        self.file_table.setStyleSheet(tool_table_qss(theme_id, selectable=True))
+        if hasattr(self, 'page_list'):
+            if theme_id not in THEMES or theme_id == 'default':
+                self.page_list.setStyleSheet(
+                    "QListWidget { background: white; border: none; }"
+                    "QListWidget::item { border: 2px solid transparent; border-radius: 8px; padding: 4px; }"
+                    "QListWidget::item:selected { background: #FFF1E8; border: 2px solid #E4572E; color: #9A3412; }"
+                )
+            else:
+                tokens = theme_tokens(theme_id)
+                self.page_list.setStyleSheet(
+                    f"QListWidget {{ background: {tokens['panel_bg']}; border: none; }}"
+                    "QListWidget::item { border: 2px solid transparent; border-radius: 8px; padding: 4px; }"
+                    f"QListWidget::item:selected {{ background: {tokens['selected']}; border: 2px solid {tokens['accent']}; color: {tokens['accent']}; }}"
+                )
+        if hasattr(self, 'progress'):
+            style_task_progress(self.progress)
 
     def _load_files(self, paths):
         first_new = None

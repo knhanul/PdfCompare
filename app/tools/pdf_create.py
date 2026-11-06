@@ -17,7 +17,7 @@ from app.common.pdf_convert import SUPPORTED_EXTS, is_supported
 from app.common.pdf_convert_worker import ConvertThreadManager
 from app.common.pdf_images import collect_images, extract_pdf_text, save_image
 from app.services import app_settings
-from app.shell.theme import header_section_qss
+from app.shell.theme import build_shell_qss, header_section_qss, tool_table_qss
 from app.common.styles import COLOR_BORDER, COLOR_PRIMARY, MODERN_QSS
 from app.common.loading_dialog import note_progress, style_task_progress
 from app.common.user_prefs import load_dir, save_dir
@@ -84,7 +84,7 @@ class PdfCreateWidget(QWidget):
 
     def __init__(self, parent=None, comparison_settings=None):
         super().__init__(parent)
-        self.setStyleSheet(MODERN_QSS)
+        self.setStyleSheet(MODERN_QSS + build_shell_qss(app_settings.get('ui/theme')))
         self.setAcceptDrops(True)
         self.output_dir = ""
         self.paths = []
@@ -242,36 +242,14 @@ class PdfCreateWidget(QWidget):
         self.splitter.setStretchFactor(1, 13)
         root.addWidget(self.splitter, 1)
         self._create_bottom_bar(root)
+        self._style_file_table()
 
     def _style_file_table(self):
-        header = header_section_qss(app_settings.get('ui/theme'))
-        self.file_table.setStyleSheet(f"""
-            QTableWidget {{
-                background: white;
-                border: 1px solid {COLOR_BORDER};
-                outline: none;
-            }}
-            QTableWidget::item {{
-                border: none;
-                padding: 2px 4px;
-            }}
-            {header}
-            QCheckBox::indicator {{
-                width: 18px;
-                height: 18px;
-                border: 1.5px solid #C6C6C8;
-                border-radius: 5px;
-                background: white;
-            }}
-            QCheckBox::indicator:checked {{
-                background: {COLOR_PRIMARY};
-                border: 1.5px solid {COLOR_PRIMARY};
-            }}
-            QCheckBox::indicator:indeterminate {{
-                background: rgba(255, 107, 0, 0.35);
-                border: 1.5px solid {COLOR_PRIMARY};
-            }}
-        """)
+        theme_id = app_settings.get('ui/theme')
+        self.setStyleSheet(MODERN_QSS + build_shell_qss(theme_id))
+        self.file_table.setStyleSheet(tool_table_qss(theme_id, selectable=False))
+        if hasattr(self, 'progress'):
+            style_task_progress(self.progress)
 
     def showEvent(self, event):
         super().showEvent(event)

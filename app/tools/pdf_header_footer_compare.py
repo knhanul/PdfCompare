@@ -22,6 +22,8 @@ from app.common.pdf_text_normalizer import collect_raw_chars, normalize_raw_char
 from app.common.comparison_options import ComparisonOptions
 from app.common.comparison_settings import ComparisonSettingsMixin
 from app.common.tool_toggle import ToolSwitchToggle
+from app.services import app_settings
+from app.shell.theme import THEMES, build_shell_qss, theme_tokens
 
 
 class SyncScrollToggle(QCheckBox):
@@ -40,7 +42,9 @@ class SyncScrollToggle(QCheckBox):
         if not self.isEnabled():
             painter.setOpacity(0.4)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(COLOR_PRIMARY if self.isChecked() else '#A0A0A0'))
+        theme_id = app_settings.get('ui/theme')
+        checked_color = COLOR_PRIMARY if theme_id not in THEMES or theme_id == 'default' else theme_tokens(theme_id)['accent']
+        painter.setBrush(QColor(checked_color if self.isChecked() else '#A0A0A0'))
         painter.drawRoundedRect(track, track.height() / 2, track.height() / 2)
         diameter = track.height() - 4
         x = track.right() - diameter - 2 if self.isChecked() else track.left() + 2
@@ -924,6 +928,15 @@ class HFCompareWidget(ComparisonSettingsMixin, QWidget):
         self.viewer1.verticalScrollBar().valueChanged.connect(self._sync1)
         self.viewer2.verticalScrollBar().valueChanged.connect(self._sync2)
 
+    def _style_file_table(self):
+        theme_id = app_settings.get('ui/theme')
+        if hasattr(self, 'switch_toggle'):
+            self.switch_toggle.apply_theme(theme_id)
+        if hasattr(self, 'sync_scroll_cb'):
+            self.sync_scroll_cb.update()
+
+    _style_table = _style_file_table
+
     def _sync1(self, v):
         """viewer1 스크롤 시 viewer2 동기화"""
         if not self._syncing and self.sync_scroll_enabled:
@@ -1458,7 +1471,7 @@ class HFCompareWidget(ComparisonSettingsMixin, QWidget):
         dialog = QDialog(self)
         dialog.setWindowTitle('📋 범례 및 주의사항')
         dialog.setFixedSize(600, 450)
-        dialog.setStyleSheet(MODERN_QSS)
+        dialog.setStyleSheet(MODERN_QSS + build_shell_qss(app_settings.get('ui/theme')))
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(30, 30, 30, 30)
 
@@ -1519,7 +1532,7 @@ class HFCompareWidget(ComparisonSettingsMixin, QWidget):
         dialog = QDialog(self)
         dialog.setWindowTitle(f'📋 비교 결과 목록 · {self.comparison_settings.options.label}')
         dialog.setFixedSize(700, 500)
-        dialog.setStyleSheet(MODERN_QSS)
+        dialog.setStyleSheet(MODERN_QSS + build_shell_qss(app_settings.get('ui/theme')))
         dialog.setWindowModality(Qt.WindowModality.NonModal)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         layout = QVBoxLayout(dialog)

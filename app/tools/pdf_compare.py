@@ -19,6 +19,8 @@ from app.common.comparison_options import ComparisonOptions
 from app.common.comparison_settings import ComparisonSettingsMixin
 from app.common.tool_toggle import ToolSwitchToggle
 from app.common.pdf_file_open import open_pdf_dialog, try_open_pdf, show_open_error
+from app.services import app_settings
+from app.shell.theme import build_shell_qss
 
 
 class ViewComparisonTextDialog(QDialog):
@@ -26,7 +28,7 @@ class ViewComparisonTextDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle('추출 데이터 정밀 확인')
         self.resize(1050, 850)
-        self.setStyleSheet(MODERN_QSS)
+        self.setStyleSheet(MODERN_QSS + build_shell_qss(app_settings.get('ui/theme')))
         main_layout = QVBoxLayout(self)
         main_layout.setSpacing(15)
         main_layout.setContentsMargins(20, 20, 20, 20)
@@ -1247,6 +1249,13 @@ class PdfCompareWidget(ComparisonSettingsMixin, QWidget):
         self.btn_reset_page.clicked.connect(self.request_reset_page)
         self.btn_view_text.clicked.connect(self.show_text_dialog)
 
+    def _style_file_table(self):
+        theme_id = app_settings.get('ui/theme')
+        if hasattr(self, 'switch_toggle'):
+            self.switch_toggle.apply_theme(theme_id)
+
+    _style_table = _style_file_table
+
     def resizeEvent(self, event):
         """창 크기 변경 시 로딩 오버레이 중앙 정렬"""
         super().resizeEvent(event)
@@ -1771,7 +1780,7 @@ class PdfCompareWidget(ComparisonSettingsMixin, QWidget):
         dialog = QDialog(self)
         dialog.setWindowTitle('📋 범례 및 주의사항')
         dialog.setFixedSize(600, 450)
-        dialog.setStyleSheet(MODERN_QSS)
+        dialog.setStyleSheet(MODERN_QSS + build_shell_qss(app_settings.get('ui/theme')))
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(30, 30, 30, 30)
         
@@ -1827,7 +1836,7 @@ class PdfCompareWidget(ComparisonSettingsMixin, QWidget):
         dialog = QDialog(self)
         dialog.setWindowTitle('🎨 하이라이트 범례')
         dialog.setFixedSize(500, 300)
-        dialog.setStyleSheet(MODERN_QSS)
+        dialog.setStyleSheet(MODERN_QSS + build_shell_qss(app_settings.get('ui/theme')))
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(30, 30, 30, 30)
         
@@ -1861,7 +1870,7 @@ class PdfCompareWidget(ComparisonSettingsMixin, QWidget):
         dialog = QDialog(self)
         dialog.setWindowTitle('⚠️ 주의사항')
         dialog.setFixedSize(550, 350)
-        dialog.setStyleSheet(MODERN_QSS)
+        dialog.setStyleSheet(MODERN_QSS + build_shell_qss(app_settings.get('ui/theme')))
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(30, 30, 30, 30)
         
@@ -1903,7 +1912,7 @@ class PdfCompareWidget(ComparisonSettingsMixin, QWidget):
         dialog = QDialog(self)
         dialog.setWindowTitle(f'📋 비교 결과 목록 · {self.comparison_settings.options.label}')
         dialog.setFixedSize(700, 500)
-        dialog.setStyleSheet(MODERN_QSS)
+        dialog.setStyleSheet(MODERN_QSS + build_shell_qss(app_settings.get('ui/theme')))
         dialog.setWindowModality(Qt.WindowModality.NonModal)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         layout = QVBoxLayout(dialog)

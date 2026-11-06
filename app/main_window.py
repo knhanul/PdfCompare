@@ -657,6 +657,7 @@ class MdiMainWindow(QMainWindow):
         new_tool.show()
         self.current_tool_widget = new_tool
         self.current_tool_key = tool_key
+        self._refresh_tool_table_themes()
 
         # Update header and sidebar
         self.header_title.setText(tool_definition['window_title'])

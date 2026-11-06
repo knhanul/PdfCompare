@@ -164,25 +164,267 @@ QHeaderView::section {{
 """
 
 
+_NON_DEFAULT_CHROME_TEMPLATE = """
+QPushButton {{
+    background-color: {panel_bg}; color: {accent}; border: 1px solid {border};
+}}
+QPushButton:hover, QPushButton:pressed {{
+    background-color: {selected}; color: {accent_hover}; border-color: {accent};
+}}
+QPushButton:checked {{
+    background-color: {selected}; color: {accent}; border: 1px solid {accent}; font-weight: 600;
+}}
+QPushButton:disabled {{
+    background-color: {sidebar_bg}; color: {text_muted}; border-color: {border};
+}}
+QPushButton#primaryBtn,
+QPushButton#actionBtn,
+QPushButton#compareBtn,
+QPushButton#compareActionBtn,
+QPushButton#pdfOpenButton {{
+    background-color: {accent}; color: {on_accent}; border: 1px solid {accent};
+}}
+QPushButton#primaryBtn:hover, QPushButton#primaryBtn:pressed,
+QPushButton#actionBtn:hover, QPushButton#actionBtn:pressed,
+QPushButton#compareBtn:hover, QPushButton#compareBtn:pressed,
+QPushButton#compareActionBtn:hover, QPushButton#compareActionBtn:pressed,
+QPushButton#pdfOpenButton:hover, QPushButton#pdfOpenButton:pressed {{
+    background-color: {accent_hover}; color: {on_accent}; border-color: {accent_hover};
+}}
+QPushButton#primaryBtn:disabled,
+QPushButton#actionBtn:disabled,
+QPushButton#compareBtn:disabled,
+QPushButton#compareActionBtn:disabled,
+QPushButton#pdfOpenButton:disabled {{
+    background-color: {sidebar_bg}; color: {text_muted}; border-color: {border};
+}}
+QPushButton#secondaryBtn {{
+    background-color: {panel_bg}; color: {accent}; border: 1px solid {accent};
+}}
+QPushButton#secondaryBtn:hover,
+QPushButton#secondaryBtn:pressed,
+QPushButton#secondaryBtn:checked {{
+    background-color: {selected}; color: {accent_hover}; border-color: {accent_hover};
+}}
+QPushButton#secondaryBtn:disabled {{
+    background-color: {sidebar_bg}; color: {text_muted}; border-color: {border};
+}}
+QPushButton#compareUtilityBtn {{
+    background-color: {panel_bg}; color: {accent}; border: 1px solid {border};
+}}
+QPushButton#compareUtilityBtn:hover,
+QPushButton#compareUtilityBtn:pressed {{
+    background-color: {selected}; color: {accent_hover}; border-color: {accent};
+}}
+QPushButton#compareUtilityBtn:disabled {{
+    background-color: {sidebar_bg}; color: {text_muted}; border-color: {border};
+}}
+#toolbarBtn, QPushButton#toolbarBtn {{
+    background-color: {panel_bg}; color: {accent}; border: 1px solid {border};
+}}
+#toolbarBtn:hover, #toolbarBtn:pressed, #toolbarBtn:checked,
+QPushButton#toolbarBtn:hover, QPushButton#toolbarBtn:pressed, QPushButton#toolbarBtn:checked {{
+    background-color: {selected}; color: {accent_hover}; border-color: {accent};
+}}
+#toolbarBtn:disabled, QPushButton#toolbarBtn:disabled {{
+    background-color: {sidebar_bg}; color: {text_muted}; border-color: {border};
+}}
+QPushButton#viewerToolBtn {{
+    background-color: {panel_bg}; color: {accent}; border: 1px solid {border};
+}}
+QPushButton#viewerToolBtn:hover, QPushButton#viewerToolBtn:pressed, QPushButton#viewerToolBtn:checked {{
+    background-color: {selected}; color: {accent_hover}; border-color: {accent};
+}}
+QFrame#toolToggle {{
+    background-color: {sidebar_bg}; border: 1px solid {border}; border-radius: 12px;
+}}
+QLabel#toolToggleCaption {{
+    color: {accent}; font-size: 11px; font-weight: 700; padding: 0 4px 0 6px; background: transparent;
+}}
+QFrame#toolToggle QPushButton#toolToggleBtn {{
+    background-color: transparent; border: none; border-radius: 8px;
+    color: {text_muted}; font-size: 12px; font-weight: 500; padding: 4px 12px; min-height: 22px;
+}}
+QFrame#toolToggle QPushButton#toolToggleBtn:hover {{
+    background-color: {hover}; color: {text};
+}}
+QFrame#toolToggle QPushButton#toolToggleBtn:checked {{
+    background-color: {accent}; color: {on_accent}; font-weight: 700;
+}}
+#pdfToolbar, QFrame#actionBar {{
+    background-color: {panel_bg}; border-color: {border};
+}}
+#toolbarLabel {{ color: {text_muted}; }}
+#toolbarSearch {{
+    background-color: {app_bg}; color: {text}; border: 1px solid {border};
+}}
+#toolbarSearch:focus {{
+    border-color: {accent}; background-color: {panel_bg};
+}}
+QLabel#hfInstruction {{
+    background-color: {selected}; color: {text}; border: 1px solid {border};
+}}
+QTabWidget::pane {{
+    border: 1px solid {border}; background: {panel_bg}; border-radius: 6px;
+}}
+QTabBar::tab {{
+    background: {sidebar_bg}; color: {text_muted}; border: 1px solid {border};
+    border-bottom: none; border-top-left-radius: 6px; border-top-right-radius: 6px;
+    padding: 6px 12px; margin-right: 2px;
+}}
+QTabBar::tab:hover {{
+    background: {hover}; color: {text};
+}}
+QTabBar::tab:selected {{
+    background: {panel_bg}; color: {accent}; border-color: {border};
+    border-top: 2px solid {accent}; font-weight: 600;
+}}
+QTableWidget, QTableView {{
+    background-color: {panel_bg}; color: {text}; gridline-color: {border};
+    border: 1px solid {border}; selection-background-color: {selected}; selection-color: {text};
+}}
+QTableWidget::item:selected, QTableView::item:selected {{
+    background-color: {selected}; color: {text};
+}}
+QHeaderView {{
+    background-color: {accent}; border: none;
+}}
+QTableCornerButton::section {{
+    background-color: {accent}; border: none;
+}}
+QHeaderView QCheckBox::indicator {{
+    background-color: {panel_bg}; border: 1.5px solid {on_accent};
+}}
+QHeaderView QCheckBox::indicator:checked {{
+    background-color: {accent_hover}; border: 1.5px solid {on_accent};
+}}
+QHeaderView QCheckBox::indicator:indeterminate {{
+    background-color: {selected}; border: 1.5px solid {on_accent};
+}}
+QProgressBar {{
+    border: 1px solid {border}; border-radius: 6px; background: {sidebar_bg};
+    text-align: center; color: {text};
+}}
+QProgressBar::chunk {{
+    background-color: {accent}; border-radius: 5px;
+}}
+"""
+
+
 def header_section_qss(theme_id='default'):
     """QHeaderView::section colors for the active shell theme (tool tables)."""
     tokens = theme_tokens(theme_id)
     on_accent = '#202124' if theme_id in ('energy', 'black') else '#FFFFFF'
     return (
+        f"QHeaderView {{ background-color: {tokens['accent']}; border: none; }} "
         'QHeaderView::section {'
         f" background-color: {tokens['accent']}; color: {on_accent}; font-weight: 600;"
         ' border: none;'
         f" border-right: 1px solid {tokens['accent_hover']};"
         f" border-bottom: 2px solid {tokens['accent_hover']};"
-        ' padding: 6px 8px; }'
+        ' padding: 6px 8px; } '
+        f"QTableCornerButton::section {{ background-color: {tokens['accent']}; border: none; }}"
     )
+
+
+def tool_table_qss(theme_id='default', selectable=True):
+    """Complete QTableWidget + QHeaderView + QCheckBox stylesheet for tool grids."""
+    header = header_section_qss(theme_id)
+    if theme_id not in THEMES or theme_id == 'default':
+        sel_bg = '#FFF8F2' if selectable else 'transparent'
+        return f"""
+            QTableWidget {{
+                background: white;
+                border: 1px solid #D1D1D6;
+                outline: none;
+                selection-background-color: {sel_bg};
+                selection-color: #1C1C1E;
+            }}
+            QTableWidget::item {{
+                border: none;
+                padding: 2px 4px;
+            }}
+            QTableWidget::item:selected {{
+                background-color: {sel_bg};
+                color: #1C1C1E;
+            }}
+            {header}
+            QCheckBox::indicator {{
+                width: 18px;
+                height: 18px;
+                border: 1.5px solid #C6C6C8;
+                border-radius: 5px;
+                background: white;
+            }}
+            QCheckBox::indicator:checked {{
+                background: #FF6B00;
+                border: 1.5px solid #FF6B00;
+            }}
+            QCheckBox::indicator:indeterminate {{
+                background: rgba(255, 107, 0, 0.35);
+                border: 1.5px solid #FF6B00;
+            }}
+        """
+    tokens = theme_tokens(theme_id)
+    on_accent = '#202124' if theme_id in ('energy', 'black') else '#FFFFFF'
+    sel_bg = tokens['selected'] if selectable else 'transparent'
+    return f"""
+        QTableWidget {{
+            background: {tokens['panel_bg']};
+            color: {tokens['text']};
+            gridline-color: {tokens['border']};
+            border: 1px solid {tokens['border']};
+            outline: none;
+            selection-background-color: {sel_bg};
+            selection-color: {tokens['text']};
+        }}
+        QTableWidget::item {{
+            border: none;
+            padding: 2px 4px;
+        }}
+        QTableWidget::item:selected {{
+            background-color: {sel_bg};
+            color: {tokens['text']};
+        }}
+        {header}
+        QCheckBox::indicator {{
+            width: 18px;
+            height: 18px;
+            border: 1.5px solid {tokens['border']};
+            border-radius: 5px;
+            background: {tokens['panel_bg']};
+        }}
+        QCheckBox::indicator:checked {{
+            background: {tokens['accent']};
+            border: 1.5px solid {tokens['accent_hover']};
+        }}
+        QCheckBox::indicator:indeterminate {{
+            background: {tokens['selected']};
+            border: 1.5px solid {tokens['accent']};
+        }}
+        QHeaderView QCheckBox::indicator {{
+            background: {tokens['panel_bg']};
+            border: 1.5px solid {on_accent};
+        }}
+        QHeaderView QCheckBox::indicator:checked {{
+            background: {tokens['accent_hover']};
+            border: 1.5px solid {on_accent};
+        }}
+        QHeaderView QCheckBox::indicator:indeterminate {{
+            background: {tokens['selected']};
+            border: 1.5px solid {on_accent};
+        }}
+    """
 
 
 def build_shell_qss(theme_id='default'):
     tokens = theme_tokens(theme_id)
     # Dark text has better small-label contrast on bright energy orange.
     tokens['on_accent'] = '#202124' if theme_id in ('energy', 'black') else '#FFFFFF'
-    return (_SHELL_TEMPLATE + _CHROME_TEMPLATE).format(**tokens)
+    qss = (_SHELL_TEMPLATE + _CHROME_TEMPLATE).format(**tokens)
+    if theme_id in THEMES and theme_id != 'default':
+        qss += _NON_DEFAULT_CHROME_TEMPLATE.format(**tokens)
+    return qss
 
 
 SHELL_QSS = build_shell_qss()  # compatibility for existing imports

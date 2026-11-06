@@ -135,6 +135,37 @@ class FormFillerPanel(QWidget):
         )
         save_lay.addWidget(self.btn_save_filled)
         outer.addWidget(save_group)
+        self.apply_theme()
+
+    def apply_theme(self, theme_id=None):
+        from app.services import app_settings
+        from app.shell.theme import THEMES, theme_tokens
+
+        if theme_id is None:
+            theme_id = app_settings.get("ui/theme")
+        if theme_id not in THEMES or theme_id == "default":
+            self.status_card.setStyleSheet(
+                "QFrame { background-color: #F7F5F2; border: 1px solid #DFDAD4; border-radius: 8px; padding: 6px; }"
+            )
+            self.lbl_progress_detail.setStyleSheet("color: #3D3835; font-size: 12px; font-weight: 600;")
+            self.lbl_badges.setStyleSheet("color: #6B6560; font-size: 11px;")
+            self.empty_box.setStyleSheet(
+                "QFrame { background-color: #FFFBF7; border: 1px dashed #D4A373; border-radius: 10px; padding: 18px; }"
+            )
+            self.lbl_found_summary.setStyleSheet("color: #2C2A29; font-size: 13px;")
+        else:
+            tokens = theme_tokens(theme_id)
+            self.status_card.setStyleSheet(
+                f"QFrame {{ background-color: {tokens['panel_bg']}; border: 1px solid {tokens['border']}; border-radius: 8px; padding: 6px; }}"
+            )
+            self.lbl_progress_detail.setStyleSheet(f"color: {tokens['text']}; font-size: 12px; font-weight: 600;")
+            self.lbl_badges.setStyleSheet(f"color: {tokens['text_muted']}; font-size: 11px;")
+            self.empty_box.setStyleSheet(
+                f"QFrame {{ background-color: {tokens['panel_bg']}; border: 1px dashed {tokens['accent']}; border-radius: 10px; padding: 18px; }}"
+            )
+            self.lbl_found_summary.setStyleSheet(f"color: {tokens['text']}; font-size: 13px;")
+        if self.session:
+            self._highlight_card(self._active_field_name)
 
     def bind_session(self, session: FormDocumentSession | None):
         self.session = session
@@ -337,15 +368,31 @@ class FormFillerPanel(QWidget):
 
     @staticmethod
     def _apply_card_style(card: QFrame, selected: bool, required_missing: bool):
-        if selected:
-            border = "2px solid #A63F2B"
-            bg = "#FFF8F4"
-        elif required_missing:
-            border = "1px solid #E07A5F"
-            bg = "#FFFDFB"
+        from app.services import app_settings
+        from app.shell.theme import THEMES, theme_tokens
+
+        theme_id = app_settings.get("ui/theme")
+        if theme_id not in THEMES or theme_id == "default":
+            if selected:
+                border = "2px solid #A63F2B"
+                bg = "#FFF8F4"
+            elif required_missing:
+                border = "1px solid #E07A5F"
+                bg = "#FFFDFB"
+            else:
+                border = "1px solid #DFDAD4"
+                bg = "#FFFFFF"
         else:
-            border = "1px solid #DFDAD4"
-            bg = "#FFFFFF"
+            tokens = theme_tokens(theme_id)
+            if selected:
+                border = f"2px solid {tokens['accent']}"
+                bg = tokens["selected"]
+            elif required_missing:
+                border = f"1px solid {tokens['accent']}"
+                bg = tokens["warning_bg"]
+            else:
+                border = f"1px solid {tokens['border']}"
+                bg = tokens["panel_bg"]
         card.setStyleSheet(f"QFrame {{ background-color: {bg}; border: {border}; border-radius: 8px; }}")
 
     def _on_editor_focused(self, field_name: str, primary_xref: int):
