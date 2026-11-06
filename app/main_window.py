@@ -943,8 +943,8 @@ class MdiMainWindow(QMainWindow):
             pass
         self.doc_manager.close_all()
         if 'app.viewer.render_service' in __import__('sys').modules:
-            from app.viewer.render_service import render_service
-            render_service().shutdown()
+            from app.viewer.render_service import reset_render_service
+            reset_render_service()
 
         # 이벤트 수락 (창 닫기 진행)
         event.accept()

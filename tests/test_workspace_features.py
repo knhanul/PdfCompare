@@ -23,6 +23,8 @@ def win(tmp_path, monkeypatch):
     app.processEvents()
     yield w, app, tmp_path
     w.close()
+    from app.viewer.render_service import reset_render_service
+    reset_render_service()
 
 
 def test_settings_page_persists(win):

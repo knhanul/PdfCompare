@@ -52,17 +52,39 @@ class _RenderJob(QRunnable):
         self.signals.done.emit(self.key, img)
 
 
+def _alive(obj):
+    if obj is None:
+        return False
+    try:
+        from PyQt6 import sip
+        return not sip.isdeleted(obj)
+    except Exception:
+        try:
+            obj.objectName()
+            return True
+        except RuntimeError:
+            return False
+
+
 class RenderService(QObject):
     rendered = pyqtSignal(object)  # key
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.cache = PageCache()
-        self.pool = QThreadPool(self)
+        # Unparented pool: survives window teardown; Python holds the ref.
+        self.pool = QThreadPool()
         self.pool.setMaxThreadCount(2)
         self._pending = set()
         self._signals = _Signals()
         self._signals.done.connect(self._on_done)
+
+    def _ensure_pool(self):
+        if _alive(self.pool):
+            return self.pool
+        self.pool = QThreadPool()
+        self.pool.setMaxThreadCount(2)
+        return self.pool
 
     @staticmethod
     def make_key(path, page_no, zoom):
@@ -73,7 +95,7 @@ class RenderService(QObject):
         img = self.cache.get(key)
         if img is None and key not in self._pending:
             self._pending.add(key)
-            self.pool.start(_RenderJob(key, self._signals))
+            self._ensure_pool().start(_RenderJob(key, self._signals))
         return img
 
     def _on_done(self, key, img):
@@ -87,14 +109,16 @@ class RenderService(QObject):
             self.cache.max_bytes = int(cache_mb) * 1024 * 1024
             self.cache.put_trim()
         if threads:
-            self.pool.setMaxThreadCount(max(1, int(threads)))
+            self._ensure_pool().setMaxThreadCount(max(1, int(threads)))
 
     def forget(self, path):
         self.cache.drop_path(path)
 
     def shutdown(self):
-        self.pool.clear()
-        self.pool.waitForDone(2000)
+        pool = self.pool
+        if _alive(pool):
+            pool.clear()
+            pool.waitForDone(2000)
 
 
 _service = None
@@ -102,11 +126,25 @@ _service = None
 
 def render_service():
     global _service
-    if _service is None:
+    if not _alive(_service):
         _service = RenderService()
         try:
             from app.services import app_settings
-            _service.configure(app_settings.get('perf/render_cache_mb'), app_settings.get('perf/render_threads'))
+            _service.configure(
+                app_settings.get('perf/render_cache_mb'),
+                app_settings.get('perf/render_threads'),
+            )
         except Exception:
             pass
     return _service
+
+
+def reset_render_service():
+    """Drop the process-wide singleton (tests / app exit)."""
+    global _service
+    if _alive(_service):
+        try:
+            _service.shutdown()
+        except RuntimeError:
+            pass
+    _service = None

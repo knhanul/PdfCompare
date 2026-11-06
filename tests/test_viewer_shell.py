@@ -101,3 +101,5 @@ def test_open_split_and_form_banner(qapp, tmp_path, monkeypatch):
     w.viewer._close_tab(0)
     assert w.mode_stack.currentWidget() is w.welcome_page
     w.close()
+    from app.viewer.render_service import reset_render_service
+    reset_render_service()
