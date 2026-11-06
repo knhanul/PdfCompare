@@ -465,10 +465,15 @@ QPushButton#headerFocusBtn:hover {{
     background: {COLOR_HEADER_HOVER};
 }}
 
-QPushButton#headerFocusBtn:checked {{
+QPushButton#headerFocusBtn:checked,
+QPushButton#headerFocusBtn[floating='true'] {{
     background: {COLOR_HEADER_HOVER};
     border-color: {COLOR_HEADER_ACCENT_BORDER};
     color: #873729;
+    padding: 0px;
+    border-radius: 6px;
+    min-width: 0px;
+    min-height: 0px;
 }}
 
 QPushButton#compareUtilityBtn {{

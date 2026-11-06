@@ -71,10 +71,18 @@ def _settings(p):
     p.drawEllipse(QRectF(5.5, 5.5, 9, 9))
 
 
+def _exit_focus(p):
+    p.drawPolyline([QPointF(3.5, 7.5), QPointF(7.5, 7.5), QPointF(7.5, 3.5)])
+    p.drawPolyline([QPointF(16.5, 7.5), QPointF(12.5, 7.5), QPointF(12.5, 3.5)])
+    p.drawPolyline([QPointF(3.5, 12.5), QPointF(7.5, 12.5), QPointF(7.5, 16.5)])
+    p.drawPolyline([QPointF(16.5, 12.5), QPointF(12.5, 12.5), QPointF(12.5, 16.5)])
+
+
 ICON_PAINTERS = {
     'home': _home, 'viewer': _doc, 'split': _split, 'settings': _settings,
     'pdf_compare': _compare, 'pdf_hf_compare': _header, 'pdf_editor': _edit,
     'pdf_create': _create, 'file_rename': _tag, 'pdf_form': _form, 'doc': _doc,
+    'exit_focus': _exit_focus,
 }
 
 

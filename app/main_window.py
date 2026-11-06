@@ -179,6 +179,9 @@ class MdiMainWindow(QMainWindow):
             color = tokens['accent'] if b.property('active') else tokens['sidebar_icon']
             b.setIcon(line_icon(key, color, 18))
             b.setIconSize(QSize(18, 18))
+        if hasattr(self, 'header_focus_btn') and getattr(self, 'focus_mode', False):
+            self.header_focus_btn.setIcon(line_icon('exit_focus', tokens['accent'], 16))
+            self.header_focus_btn.setIconSize(QSize(16, 16))
 
     def create_right_panel(self):
         right_panel = QWidget()
@@ -270,6 +273,7 @@ class MdiMainWindow(QMainWindow):
 
     def toggle_sidebar(self):
         self.focus_mode = not self.focus_mode
+        self._sync_header_focus_button()
         if self.focus_mode:
             # Enter focus mode: hide sidebar and header bar completely
             self.sidebar_width = 0
@@ -288,7 +292,6 @@ class MdiMainWindow(QMainWindow):
             self.sidebar_animation.start()
             self._dock_focus_button(False)
             self.header_bar.show()
-        self._sync_header_focus_button()
         for tool in self.tool_cache.values():
             self.update_focus_button(tool)
 
@@ -310,10 +313,24 @@ class MdiMainWindow(QMainWindow):
     def _sync_header_focus_button(self):
         button = self.header_focus_btn
         label = '일반 모드로 전환' if self.focus_mode else '집중 모드로 전환'
-        button.setText('일반모드' if self.focus_mode else '집중모드')
+        button.setProperty('floating', self.focus_mode)
+        if self.focus_mode:
+            button.setText('')
+            button.setIcon(line_icon('exit_focus', self._sidebar_tokens()['accent'], 16))
+            button.setIconSize(QSize(16, 16))
+            button.setFixedSize(28, 28)
+        else:
+            button.setText('집중모드')
+            button.setIcon(QIcon())
+            button.setMinimumSize(0, 0)
+            button.setMaximumSize(16777215, 16777215)
         button.setChecked(self.focus_mode)
         button.setToolTip(label)
         button.setAccessibleName(label)
+        button.style().unpolish(button)
+        button.style().polish(button)
+        if self.focus_mode:
+            self._position_focus_button()
 
     def _dock_focus_button(self, floating):
         button = self.header_focus_btn
