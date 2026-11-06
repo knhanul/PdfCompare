@@ -2,6 +2,7 @@
 from PyQt6.QtCore import QSettings
 
 DEFAULTS = {
+    'ui/theme': 'default',              # shell palette (applied live)
     'viewer/default_zoom': 'width',      # 'width' | 'page' | '100'
     'viewer/open_mode': 'new_tab',       # 'new_tab' | 'replace'
     'viewer/show_nav': True,

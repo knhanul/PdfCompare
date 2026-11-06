@@ -12,7 +12,7 @@ from app.common.resources import APP_NAME, COMPANY_NAME, DEVELOPER, VERSION, get
 from app.common.styles import COLOR_PRIMARY, MODERN_QSS
 from app.common.comparison_settings import ComparisonSettings
 from app.services import app_settings, recent_docs, workspace_session
-from app.shell.theme import SHELL_QSS
+from app.shell.theme import build_shell_qss, theme_tokens
 from app.shell.viewer_workspace import ViewerWorkspace
 from app.shell.welcome_page import WelcomePage
 from app.viewer.document_manager import DocumentManager
@@ -26,7 +26,6 @@ class MdiMainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(f'{APP_NAME} v{VERSION}')
         self.setGeometry(50, 50, 1700, 1000)
-        self.setStyleSheet(MODERN_QSS + SHELL_QSS)
         self.setAcceptDrops(True)
 
         ico_path = get_icon_path()
@@ -504,7 +503,9 @@ class MdiMainWindow(QMainWindow):
     def toggle_button_blink(self):
         self.blink_state = not self.blink_state
         if self.blink_state:
-            self.legend_caution_btn.setStyleSheet('QPushButton#headerLegendBtn { background-color: #EEDBD5; }')
+            color = theme_tokens(app_settings.get('ui/theme'))['selected']
+            self.legend_caution_btn.setStyleSheet(
+                f'QPushButton#headerLegendBtn {{ background-color: {color}; }}')
         else:
             self.legend_caution_btn.setStyleSheet('')
 
@@ -726,6 +727,10 @@ class MdiMainWindow(QMainWindow):
 
     # ---- settings (screen 7) --------------------------------------------------
     def apply_settings(self, key='*'):
+        if key in ('*', 'ui/theme'):
+            self.setStyleSheet(MODERN_QSS + build_shell_qss(app_settings.get('ui/theme')))
+            # Local blink styles otherwise win over the new palette.
+            self.legend_caution_btn.setStyleSheet('')
         self.tool_cache_max = max(1, app_settings.get('perf/tool_cache_max'))
         self.viewer.default_fit = app_settings.get('viewer/default_zoom')
         self.viewer.nav_default_visible = app_settings.get('viewer/show_nav')

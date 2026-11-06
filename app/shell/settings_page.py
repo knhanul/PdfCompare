@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QFrame, QHBoxLay
                              QScrollArea, QSpinBox, QVBoxLayout, QWidget)
 
 from app.services import app_settings, recent_docs, workspace_session
+from app.shell.theme import THEME_CHOICES
 
 ZOOM_CHOICES = [('width', '폭 맞춤'), ('page', '쪽 맞춤'), ('100', '100%')]
 OPEN_CHOICES = [('new_tab', '새 탭에서 열기'), ('replace', '현재 탭 바꾸기')]
@@ -39,10 +40,11 @@ class SettingsPage(QWidget):
             return f
 
         f = section('화면')
-        note = QLabel('밝은 테마(웜 그레이)를 사용합니다. 어두운 테마는 이후 버전에서 제공 예정입니다.')
-        note.setObjectName('mutedLabel')
-        note.setWordWrap(True)
-        f.addRow('테마', note)
+        self.theme = QComboBox()
+        self.theme.setObjectName('themeCombo')
+        for key, title in THEME_CHOICES:
+            self.theme.addItem(title, key)
+        f.addRow('테마', self.theme)
         self.compact = QCheckBox('좁은 창에서 사이드바를 아이콘으로 줄이기')
         f.addRow('사이드바', self.compact)
 
@@ -102,6 +104,7 @@ class SettingsPage(QWidget):
         col.addStretch()
 
         self._binds = [
+            (self.theme, 'ui/theme'),
             (self.compact, 'ui/auto_compact_sidebar'), (self.zoom, 'viewer/default_zoom'),
             (self.open_mode, 'viewer/open_mode'), (self.show_nav, 'viewer/show_nav'),
             (self.offer_restore, 'workspace/offer_restore'), (self.auto_restore, 'workspace/auto_restore'),
