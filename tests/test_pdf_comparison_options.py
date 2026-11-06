@@ -170,6 +170,7 @@ class ComparisonOptionsUITests(unittest.TestCase):
     def test_both_tools_share_settings_including_new_and_reopened_tools(self):
         window = MdiMainWindow()
         self.addCleanup(window.close)
+        window.open_tool('pdf_compare')  # viewer-first: tools open on demand
         area = window.current_tool_widget
         with patch.object(ComparisonOptionsDialog, 'exec', return_value=QDialog.DialogCode.Accepted), \
              patch.object(ComparisonOptionsDialog, 'selected_options', return_value=ComparisonOptions.strict()):

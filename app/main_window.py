@@ -1,14 +1,23 @@
+from collections import OrderedDict
 from functools import partial
 import importlib
+import os
  
 from PyQt6.QtCore import QEasingCurve, QLibraryInfo, QLocale, QPropertyAnimation, QSize, Qt, QTimer, QTranslator
-from PyQt6.QtGui import QFont, QIcon, QPixmap
-from PyQt6.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton, QStyle, QVBoxLayout, QWidget
+from PyQt6.QtGui import QFont, QIcon, QKeySequence, QPixmap, QShortcut
+from PyQt6.QtWidgets import QApplication, QFileDialog, QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton, QStackedWidget, QStyle, QVBoxLayout, QWidget
  
 from app.common.about_dialog import AboutDialog, get_about_info
 from app.common.resources import APP_NAME, COMPANY_NAME, DEVELOPER, VERSION, get_about_icon_path, get_icon_path, get_logo_path
 from app.common.styles import COLOR_PRIMARY, MODERN_QSS
 from app.common.comparison_settings import ComparisonSettings
+from app.services import recent_docs, workspace_session
+from app.shell.theme import SHELL_QSS
+from app.shell.viewer_workspace import ViewerWorkspace
+from app.shell.welcome_page import WelcomePage
+from app.viewer.document_manager import DocumentManager
+
+TOOL_CACHE_MAX = 3  # LRU limit for instantiated tool widgets
 
 
 class MdiMainWindow(QMainWindow):
@@ -16,7 +25,8 @@ class MdiMainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(f'{APP_NAME} v{VERSION}')
         self.setGeometry(50, 50, 1700, 1000)
-        self.setStyleSheet(MODERN_QSS)
+        self.setStyleSheet(MODERN_QSS + SHELL_QSS)
+        self.setAcceptDrops(True)
 
         ico_path = get_icon_path()
         if ico_path:
@@ -36,7 +46,10 @@ class MdiMainWindow(QMainWindow):
         self.tool_definitions = []
         self.current_tool_widget = None
         self.current_tool_key = None
-        self.tool_cache = {}  # Cache for tool widgets
+        self.tool_cache = OrderedDict()  # LRU cache for tool widgets (max TOOL_CACHE_MAX)
+        self.doc_manager = DocumentManager(self)
+        self.split_view = None
+        self.nav_buttons = {}
         self.comparison_settings = ComparisonSettings(self)
 
         # Blink animation for legend caution button
@@ -58,7 +71,9 @@ class MdiMainWindow(QMainWindow):
 
         self.register_tools()
         self.populate_sidebar_buttons()
-        self.open_tool('pdf_compare')
+        # Viewer-first: start on the welcome page. No tool module is imported here.
+        self.show_welcome()
+        QShortcut(QKeySequence('Ctrl+O'), self, activated=self.open_pdf_dialog)
 
     def create_sidebar(self):
         sidebar = QFrame()
@@ -92,6 +107,21 @@ class MdiMainWindow(QMainWindow):
         logo_layout.addWidget(self.sidebar_brand_subtitle)
         sidebar_layout.addWidget(logo_card)
 
+        self.view_button_host = QVBoxLayout()
+        self.view_button_host.setSpacing(6)
+        for key, title, icon in (('home', '홈', '🏠'), ('viewer', 'PDF 보기', '📖'), ('split', '두 PDF 동시 보기', '◫')):
+            btn = QPushButton(title)
+            btn.setObjectName('sidebarBtn')
+            btn.setProperty('active', False)
+            btn.setProperty('nav_icon', icon)
+            btn.setProperty('nav_title', title)
+            btn.clicked.connect(partial(self.activate_view, key))
+            self.view_button_host.addWidget(btn)
+            self.nav_buttons[key] = btn
+        sidebar_layout.addLayout(self.view_button_host)
+        self.tools_group_label = QLabel('도구')
+        self.tools_group_label.setObjectName('sidebarGroupLabel')
+        sidebar_layout.addWidget(self.tools_group_label)
         self.sidebar_button_host = QVBoxLayout()
         self.sidebar_button_host.setSpacing(6)
         sidebar_layout.addLayout(self.sidebar_button_host)
@@ -108,11 +138,28 @@ class MdiMainWindow(QMainWindow):
         self.header_bar = self.create_header_bar()
         right_panel_layout.addWidget(self.header_bar)
         
-        # Tool container (replaces MDI area)
+        # Mode stack: Welcome | Viewer | Split | Tool host
+        self.mode_stack = QStackedWidget()
+        self.welcome_page = WelcomePage()
+        self.welcome_page.open_requested.connect(self.open_pdf_dialog)
+        self.welcome_page.open_path.connect(self.open_pdf)
+        self.welcome_page.action_requested.connect(self._on_welcome_action)
+        self.welcome_page.restore_requested.connect(self.restore_session)
+        self.mode_stack.addWidget(self.welcome_page)
+
+        self.viewer = ViewerWorkspace()
+        self.viewer.form_fill_requested.connect(self.open_form_for)
+        self.viewer.split_requested.connect(self.open_split_view)
+        self.viewer.close_doc.connect(self._on_viewer_doc_closed)
+        self.viewer.current_changed.connect(self._update_title)
+        self.mode_stack.addWidget(self.viewer)
+
+        # Tool container (existing tools are hosted here unchanged)
         self.tool_container = QWidget()
         self.tool_container_layout = QVBoxLayout(self.tool_container)
         self.tool_container_layout.setContentsMargins(0, 0, 0, 0)
-        right_panel_layout.addWidget(self.tool_container, 1)
+        self.mode_stack.addWidget(self.tool_container)
+        right_panel_layout.addWidget(self.mode_stack, 1)
 
         return right_panel
 
@@ -323,6 +370,12 @@ class MdiMainWindow(QMainWindow):
             logo_path = get_logo_path()
             if logo_path:
                 self.sidebar_logo.setPixmap(QPixmap(logo_path).scaled(144, 64, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        self.tools_group_label.setVisible(not collapsed)
+        for button in self.nav_buttons.values():
+            button.setProperty('collapsed', collapsed)
+            button.setText(button.property('nav_icon') if collapsed else button.property('nav_title'))
+            button.style().unpolish(button)
+            button.style().polish(button)
         for tool_definition, button in zip(self.tool_definitions, self.sidebar_buttons):
             button.setProperty('collapsed', collapsed)
             if collapsed:
@@ -361,7 +414,8 @@ class MdiMainWindow(QMainWindow):
             button.setProperty('active', tool_definition['key'] == tool_key)
             button.style().unpolish(button)
             button.style().polish(button)
-        
+        self._set_active_nav(None if tool_key else self._active_view_key())
+
         # Show/hide legend caution button based on active tool
         should_show = tool_key in ('pdf_compare', 'pdf_hf_compare')
         self.legend_caution_btn.setVisible(should_show)
@@ -462,8 +516,10 @@ class MdiMainWindow(QMainWindow):
             QMessageBox.warning(self, 'Error', 'Selected tool information not found.')
             return
 
-        # If the same tool is already active, do nothing
-        if self.current_tool_key == tool_key:
+        # If the same tool is already active, just bring the tool host forward
+        if self.current_tool_key == tool_key and self.current_tool_widget:
+            self.mode_stack.setCurrentWidget(self.tool_container)
+            self.set_active_sidebar_button(tool_key)
             return
 
         # Hide current tool if exists - trigger closeEvent for thread cleanup
@@ -497,8 +553,11 @@ class MdiMainWindow(QMainWindow):
                 return
         else:
             new_tool = self.tool_cache[tool_key]
+        self.tool_cache.move_to_end(tool_key)
+        self._evict_tools(keep=tool_key)
 
         # Show the new tool
+        self.mode_stack.setCurrentWidget(self.tool_container)
         new_tool.show()
         self.current_tool_widget = new_tool
         self.current_tool_key = tool_key
@@ -531,9 +590,180 @@ class MdiMainWindow(QMainWindow):
         self.current_tool_widget = None
         self.current_tool_key = None
 
-        # 헤더와 사이드바 초기화
+        # 헤더와 사이드바 초기화 → 뷰어(열린 문서가 있으면) 또는 시작 화면으로 복귀
         self.header_title.setText(APP_NAME)
         self.set_active_sidebar_button(None)
+        if self.viewer.count():
+            self.show_viewer()
+        else:
+            self.show_welcome()
+
+    # ------------------------------------------------------------------
+    # Viewer-first shell
+    # ------------------------------------------------------------------
+    def _evict_tools(self, keep=None):
+        """LRU: keep at most TOOL_CACHE_MAX tool widgets; skip tools with unsaved changes."""
+        for key in list(self.tool_cache):
+            if len(self.tool_cache) <= TOOL_CACHE_MAX:
+                break
+            if key in (keep, self.current_tool_key):
+                continue
+            widget = self.tool_cache[key]
+            # Tools that manage unsaved edits are never evicted silently.
+            if hasattr(widget, 'confirm_discard_changes'):
+                continue
+            self.tool_cache.pop(key)
+            widget.close()
+            self.tool_container_layout.removeWidget(widget)
+            widget.deleteLater()
+
+    def _hide_current_tool(self):
+        if self.current_tool_widget:
+            self.current_tool_widget.hide()
+        self.current_tool_key = None
+        self.current_tool_widget = None
+        self.set_active_sidebar_button(None)
+
+    def _active_view_key(self):
+        w = self.mode_stack.currentWidget() if hasattr(self, 'mode_stack') else None
+        if w is self.welcome_page:
+            return 'home'
+        if w is self.viewer:
+            return 'viewer'
+        if self.split_view is not None and w is self.split_view:
+            return 'split'
+        return None
+
+    def _set_active_nav(self, key):
+        for k, b in self.nav_buttons.items():
+            b.setProperty('active', k == key)
+            b.style().unpolish(b)
+            b.style().polish(b)
+
+    def activate_view(self, key):
+        if key == 'home':
+            self.show_welcome()
+        elif key == 'viewer':
+            if self.viewer.count():
+                self.show_viewer()
+            else:
+                self.open_pdf_dialog()
+        elif key == 'split':
+            self.open_split_view()
+
+    def show_welcome(self):
+        self._hide_current_tool()
+        self.welcome_page.set_recent(recent_docs.load_recent())
+        self.welcome_page.set_restore_available(bool(workspace_session.load_session()) and not self.viewer.count())
+        self.mode_stack.setCurrentWidget(self.welcome_page)
+        self.header_title.setText(APP_NAME)
+        self._set_active_nav('home')
+
+    def show_viewer(self):
+        self._hide_current_tool()
+        self.mode_stack.setCurrentWidget(self.viewer)
+        self._update_title(self.viewer.current_doc())
+        self._set_active_nav('viewer')
+
+    def _update_title(self, doc):
+        if self.mode_stack.currentWidget() is self.viewer:
+            self.header_title.setText(doc.title if doc else 'PDF 보기')
+            self.setWindowTitle(f'{doc.title} — {APP_NAME}' if doc else f'{APP_NAME} v{VERSION}')
+
+    def open_pdf_dialog(self):
+        paths, _ = QFileDialog.getOpenFileNames(self, 'PDF 열기', '', 'PDF 파일 (*.pdf)')
+        for p in paths:
+            self.open_pdf(p)
+
+    def open_pdf(self, path, page=0):
+        if not path:
+            return False
+        if not os.path.isfile(path):
+            QMessageBox.warning(self, 'PDF 열기', f'파일을 찾을 수 없습니다.\n{path}')
+            recent_docs.remove_recent(path)
+            self.welcome_page.set_recent(recent_docs.load_recent())
+            return False
+        try:
+            doc, _ = self.doc_manager.open(path)
+        except Exception as e:
+            QMessageBox.warning(self, 'PDF 열기 실패', f'{os.path.basename(path)}\n{e}')
+            return False
+        recent_docs.add_recent(doc.path)
+        self.viewer.add_document(doc, page)
+        self.show_viewer()
+        return True
+
+    def _on_viewer_doc_closed(self, path):
+        in_split = self.split_view is not None and path in self.split_view.paths()
+        if not in_split:
+            self.doc_manager.close(path)
+        if not self.viewer.count() and self.mode_stack.currentWidget() is self.viewer:
+            self.show_welcome()
+
+    def restore_session(self):
+        for e in workspace_session.load_session():
+            self.open_pdf(e['path'], int(e.get('page', 0)))
+
+    def _on_welcome_action(self, key):
+        if key == 'split_view':
+            self.open_split_view()
+        else:
+            self.open_tool(key)
+
+    def open_split_view(self):
+        if self.split_view is None:
+            from app.viewer.split_view import SplitView  # lazy
+            self.split_view = SplitView(self.doc_manager)
+            self.split_view.closed.connect(lambda: self.show_viewer() if self.viewer.count() else self.show_welcome())
+            self.split_view.open_compare.connect(self._split_to_compare)
+            self.mode_stack.addWidget(self.split_view)
+            cur = self.viewer.current_doc()
+            if cur:
+                self.split_view.set_documents(left=cur)
+        self._hide_current_tool()
+        self.mode_stack.setCurrentWidget(self.split_view)
+        self.header_title.setText('두 PDF 동시 보기')
+        self._set_active_nav('split')
+
+    def _split_to_compare(self, tool_key):
+        paths = self.split_view.paths() if self.split_view else []
+        self.open_tool(tool_key)
+        self._handoff_to_compare(paths)
+
+    def _handoff_to_compare(self, paths):
+        """Best-effort: load already-open PDFs into the existing compare tool's two viewers."""
+        tool = self.current_tool_widget
+        for viewer_attr, path in zip(('viewer1', 'viewer2'), paths):
+            viewer = getattr(tool, viewer_attr, None)
+            if not path or viewer is None or not hasattr(viewer, 'load_pdf'):
+                continue
+            try:
+                if viewer.load_pdf(path) and hasattr(viewer, 'update_loaded_pdf_label'):
+                    viewer.update_loaded_pdf_label(path)
+            except Exception:
+                pass
+
+    def open_form_for(self, path):
+        self.open_tool('pdf_form')
+        tool = self.tool_cache.get('pdf_form')
+        if tool is not None and hasattr(tool, 'load_pdf'):
+            try:
+                tool.load_pdf(path)
+            except Exception as e:
+                QMessageBox.warning(self, 'PDF 입력폼 관리', str(e))
+
+    # drag & drop -----------------------------------------------------
+    def dragEnterEvent(self, event):
+        if any(u.toLocalFile().lower().endswith('.pdf') for u in event.mimeData().urls()):
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        if self.current_tool_widget is not None:
+            return  # existing tools handle their own drops
+        for u in event.mimeData().urls():
+            p = u.toLocalFile()
+            if p.lower().endswith('.pdf'):
+                self.open_pdf(p)
 
     def show_legend_caution_for_active_tool(self):
         # Find the active PDF compare widget
@@ -558,6 +788,15 @@ class MdiMainWindow(QMainWindow):
         for tool_widget in self.tool_cache.values():
             tool_widget.close()
         
+        try:
+            workspace_session.save_session(self.viewer.session_entries())
+        except Exception:
+            pass
+        self.doc_manager.close_all()
+        if 'app.viewer.render_service' in __import__('sys').modules:
+            from app.viewer.render_service import render_service
+            render_service().shutdown()
+
         # 이벤트 수락 (창 닫기 진행)
         event.accept()
 

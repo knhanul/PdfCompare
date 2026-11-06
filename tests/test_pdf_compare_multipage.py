@@ -149,6 +149,7 @@ class MultiPageSelectionTests(unittest.TestCase):
         window = MdiMainWindow()
         self.addCleanup(window.close)
         window.show()
+        window.open_tool('pdf_compare')  # viewer-first: tools open on demand
         area = window.current_tool_widget
         for focused in (False, True):
             if window.focus_mode != focused:
@@ -180,6 +181,7 @@ class MultiPageSelectionTests(unittest.TestCase):
         self.addCleanup(window.close)
         window.show()
         self.app.processEvents()
+        window.open_tool('pdf_compare')  # viewer-first: tools open on demand
         area = window.current_tool_widget
         normal_height = area.bottom_action_bar.height()
         normal_button_height = area.btn_compare.height()
