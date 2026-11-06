@@ -3,7 +3,7 @@
 This is *not* a comparison tool; it only shows two documents together.
 """
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import (QCheckBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QMessageBox,
+from PyQt6.QtWidgets import (QCheckBox, QFrame, QHBoxLayout, QLabel, QMessageBox,
                              QPushButton, QSplitter, QVBoxLayout, QWidget)
 
 from app.viewer.pdf_canvas import PdfCanvas
@@ -116,7 +116,8 @@ class SplitView(QWidget):
             self.right.set_document(right)
 
     def _pick(self, pane):
-        path, _ = QFileDialog.getOpenFileName(self, 'PDF 열기', '', 'PDF 파일 (*.pdf)')
+        from app.shell.open_doc_picker import pick_document
+        path = pick_document(self, self.dm, title='열린 문서에서 선택')
         if not path:
             return
         try:

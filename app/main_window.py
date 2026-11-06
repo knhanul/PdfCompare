@@ -169,6 +169,7 @@ class MdiMainWindow(QMainWindow):
         self.viewer = ViewerWorkspace()
         self.viewer.form_fill_requested.connect(self.open_form_for)
         self.viewer.split_requested.connect(self.open_split_view)
+        self.viewer.open_requested.connect(self.open_pdf_dialog)
         self.viewer.close_doc.connect(self._on_viewer_doc_closed)
         self.viewer.current_changed.connect(self._update_title)
         self.viewer.tool_requested.connect(self._on_viewer_tool_request)
@@ -764,8 +765,19 @@ class MdiMainWindow(QMainWindow):
         if key == 'pdf_form' and path:
             self.open_form_for(path)
         elif key in ('pdf_compare', 'pdf_hf_compare') and path:
+            paths = [path]
+            others = [p for p in self.doc_manager.paths() if p != path]
+            if others:
+                from app.shell.open_doc_picker import pick_document
+                second = pick_document(
+                    self, self.doc_manager,
+                    title='비교할 두 번째 PDF 선택',
+                    exclude_paths=[path],
+                )
+                if second:
+                    paths.append(second)
             self.open_tool(key)
-            self._handoff_to_compare([path])
+            self._handoff_to_compare(paths)
         else:
             self.open_tool(key)
 
@@ -871,7 +883,8 @@ class MdiMainWindow(QMainWindow):
             self.open_tool(key)
 
     def open_split_view(self):
-        if self.split_view is None:
+        created = self.split_view is None
+        if created:
             from app.viewer.split_view import SplitView  # lazy
             self.split_view = SplitView(self.doc_manager)
             self.split_view.closed.connect(lambda: self.show_viewer() if self.viewer.count() else self.show_welcome())
@@ -884,6 +897,31 @@ class MdiMainWindow(QMainWindow):
         self.mode_stack.setCurrentWidget(self.split_view)
         self.header_title.setText('두 PDF 동시 보기')
         self._set_active_nav('split')
+        # 왼쪽이 있고 오른쪽이 비었으며 다른 열린 탭이 있으면 피커를 한 번 연다
+        if self.split_view.paths()[1] is None:
+            left = self.split_view.paths()[0]
+            others = [p for p in self.doc_manager.paths() if p != left]
+            if left and others:
+                from PyQt6.QtCore import QTimer
+                QTimer.singleShot(0, self._prompt_split_right)
+
+    def _prompt_split_right(self):
+        if self.split_view is None or self.split_view.paths()[1] is not None:
+            return
+        left = self.split_view.paths()[0]
+        others = [p for p in self.doc_manager.paths() if p != left]
+        if not (left and others):
+            return
+        from app.shell.open_doc_picker import pick_document
+        path = pick_document(self, self.doc_manager, title='오른쪽 문서 선택')
+        if not path:
+            return
+        try:
+            doc, _ = self.doc_manager.open(path)
+        except Exception as e:
+            QMessageBox.warning(self, 'PDF 열기 실패', str(e))
+            return
+        self.split_view.set_documents(right=doc)
 
     def _split_to_compare(self, tool_key):
         paths = self.split_view.paths() if self.split_view else []

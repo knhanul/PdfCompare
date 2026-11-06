@@ -64,6 +64,7 @@ class DocView(QWidget):
 class ViewerWorkspace(QWidget):
     form_fill_requested = pyqtSignal(str)   # path
     split_requested = pyqtSignal()
+    open_requested = pyqtSignal()           # same as Ctrl+O / welcome open
     tab_count_changed = pyqtSignal(int)
     current_changed = pyqtSignal(object)    # doc or None
     close_doc = pyqtSignal(str)
@@ -75,6 +76,11 @@ class ViewerWorkspace(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
 
+        tab_row = QWidget()
+        tab_row.setObjectName('docTabRow')
+        trl = QHBoxLayout(tab_row)
+        trl.setContentsMargins(0, 0, 4, 0)
+        trl.setSpacing(0)
         self.tabs = QTabBar()
         self.tabs.setObjectName('docTabs')
         self.tabs.setTabsClosable(True)
@@ -82,7 +88,14 @@ class ViewerWorkspace(QWidget):
         self.tabs.setExpanding(False)
         self.tabs.setDocumentMode(True)
         self.tabs.setElideMode(Qt.TextElideMode.ElideMiddle)
-        lay.addWidget(self.tabs)
+        trl.addWidget(self.tabs, 1)
+        self.btn_open_tab = QPushButton('＋')
+        self.btn_open_tab.setObjectName('viewerToolBtn')
+        self.btn_open_tab.setToolTip('PDF 열기 (Ctrl+O)')
+        self.btn_open_tab.setFixedSize(28, 28)
+        self.btn_open_tab.clicked.connect(self.open_requested.emit)
+        trl.addWidget(self.btn_open_tab, 0, Qt.AlignmentFlag.AlignVCenter)
+        lay.addWidget(tab_row)
 
         lay.addWidget(self._build_toolbar())
 

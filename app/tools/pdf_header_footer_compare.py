@@ -396,9 +396,18 @@ class HFViewer(QScrollArea):
         elif self == self.parent_tool.viewer2:
             self.parent_tool.lbl_name2.setText(f"<b style='color:{COLOR_HEADER_ACCENT}; font-size:15px; font-weight:600;'>[PDF 2] 📄 {os.path.basename(pdf_path)}</b>")
 
-    def open_pdf_via_dialog(self):
+    def _pick_pdf_path(self):
+        """열린 문서 피커 우선, 없으면 파일 대화상자."""
+        win = self.window()
+        dm = getattr(win, 'doc_manager', None) if win is not None else None
+        if dm is not None and dm.paths():
+            from app.shell.open_doc_picker import pick_document
+            return pick_document(self, dm, title='열린 문서에서 선택')
         paths = open_pdf_dialog(self, 'PDF 파일 선택', multi=False)
-        file_path = paths[0] if paths else ""
+        return paths[0] if paths else None
+
+    def open_pdf_via_dialog(self):
+        file_path = self._pick_pdf_path()
         if not file_path:
             return
         self.clear_all_data()

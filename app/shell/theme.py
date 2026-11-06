@@ -56,4 +56,10 @@ QWidget#settingsPage {{ background: {app_bg}; }}
 QDialog#commandPalette {{ background: {panel_bg}; border: 1px solid {border}; border-radius: 8px; }}
 QDialog#commandPalette QListWidget {{ border: none; }}
 QDialog#commandPalette QListWidget::item:selected {{ background: {selected}; color: {accent}; }}
+QWidget#docTabRow {{ background: {sidebar_bg}; }}
+QDialog#openDocPicker {{ background: {panel_bg}; }}
+QListWidget#openDocList {{ background: {panel_bg}; border: 1px solid {border}; border-radius: {radius}; }}
+QListWidget#openDocList::item {{ padding: 6px 8px; border-radius: 4px; }}
+QListWidget#openDocList::item:selected {{ background: {selected}; color: {accent}; }}
+QListWidget#openDocList::item:hover {{ background: {hover}; }}
 """.format(**TOKENS)
