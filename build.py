@@ -106,6 +106,9 @@ def build(target_name: str, version: str = None, release_date: str = None, onefi
     # 원파일 모드 (--onefile) 또는 디렉터리 모드 (기본)
     if onefile:
         command[10:10] = ['--onefile']
+    # 로고 원본에서 ICO/MSIX 아이콘 자산 자동 생성 (원본이 없는 타겟은 건너뜀)
+    subprocess.run([sys.executable, str(project_root / 'scripts' / 'make_icons.py'),
+                    '--target', target_name], cwd=project_root, check=False)
     icon_path = project_root / target['icon']
     if icon_path.exists():
         command[10:10] = ['--icon', str(icon_path)]

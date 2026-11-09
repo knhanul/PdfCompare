@@ -11,6 +11,8 @@ from PyQt6.QtGui import QImage
 from app.viewer.page_cache import PageCache
 
 _local = threading.local()
+# MuPDF 컨텍스트 초기화/문서 열기는 스레드 간 동시 호출 시 간헐적 access violation 이 발생하므로 직렬화
+_open_lock = threading.Lock()
 
 
 def _open_local(path):
@@ -20,11 +22,12 @@ def _open_local(path):
     doc = docs.get(path)
     if doc is None:
         import pymupdf
-        if len(docs) > 8:
-            for d in docs.values():
-                d.close()
-            docs.clear()
-        doc = docs[path] = pymupdf.open(path)
+        with _open_lock:
+            if len(docs) > 8:
+                for d in docs.values():
+                    d.close()
+                docs.clear()
+            doc = docs[path] = pymupdf.open(path)
     return doc
 
 

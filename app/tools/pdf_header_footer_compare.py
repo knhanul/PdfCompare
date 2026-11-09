@@ -21,36 +21,10 @@ from app.common.pdf_file_open import open_pdf_dialog, try_open_pdf, show_open_er
 from app.common.pdf_text_normalizer import collect_raw_chars, normalize_raw_chars
 from app.common.comparison_options import ComparisonOptions
 from app.common.comparison_settings import ComparisonSettingsMixin
+from app.common.sync_toggle import SyncScrollToggle  # noqa: F401 (re-export)
 from app.common.tool_toggle import ToolSwitchToggle
 from app.services import app_settings
 from app.shell.theme import THEMES, build_shell_qss, theme_tokens
-
-
-class SyncScrollToggle(QCheckBox):
-    def __init__(self, text, parent=None):
-        super().__init__(text, parent)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setStyleSheet('QCheckBox::indicator { width: 36px; height: 20px; border: none; background: transparent; image: none; }')
-
-    def paintEvent(self, event):
-        super().paintEvent(event)
-        option = QStyleOptionButton()
-        self.initStyleOption(option)
-        track = QRectF(self.style().subElementRect(QStyle.SubElement.SE_CheckBoxIndicator, option, self))
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        if not self.isEnabled():
-            painter.setOpacity(0.4)
-        painter.setPen(Qt.PenStyle.NoPen)
-        theme_id = app_settings.get('ui/theme')
-        checked_color = COLOR_PRIMARY if theme_id not in THEMES or theme_id == 'default' else theme_tokens(theme_id)['accent']
-        painter.setBrush(QColor(checked_color if self.isChecked() else '#A0A0A0'))
-        painter.drawRoundedRect(track, track.height() / 2, track.height() / 2)
-        diameter = track.height() - 4
-        x = track.right() - diameter - 2 if self.isChecked() else track.left() + 2
-        painter.setBrush(QColor('white'))
-        painter.drawEllipse(QRectF(x, track.top() + 2, diameter, diameter))
-        painter.end()
 
 
 # ──────────────────────────────────────────────────────────

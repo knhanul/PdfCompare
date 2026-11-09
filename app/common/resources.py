@@ -61,7 +61,8 @@ def _candidate_paths(relative_path):
     legacy_aliases = {
         'posid_logo.png': [f'{asset_dir}/{build_target}_logo.png', f'{asset_dir}/logo.png', 'posid_logo.png'],
         'posid_logo.ico': [f'{asset_dir}/icon.ico', f'{asset_dir}/{build_target}.ico', 'posid_logo.ico'],
-        'icon.ico': [f'{asset_dir}/icon.ico', 'posid_logo.ico'],
+        'icon.ico': [f"{asset_dir}/{SETTINGS.get('ICON_FILE_NAME', 'icon.ico')}",
+                     f'{asset_dir}/icon.ico', 'posid_logo.ico'],
     }
     raw_candidates = legacy_aliases.get(relative_path, [relative_path, f'{asset_dir}/{relative_path}'])
     return [os.path.join(runtime_base, candidate) for candidate in raw_candidates]

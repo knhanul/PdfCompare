@@ -134,6 +134,7 @@ class ViewerWorkspace(QWidget):
         QShortcut(QKeySequence('Ctrl+Shift+F'), self, activated=self.show_global_search)
         QShortcut(QKeySequence('Ctrl+='), self, activated=lambda: self._cv() and self._cv().canvas.zoom_in())
         QShortcut(QKeySequence('Ctrl+-'), self, activated=lambda: self._cv() and self._cv().canvas.zoom_out())
+        QShortcut(QKeySequence('Ctrl+P'), self, activated=self.print_current)
         QShortcut(QKeySequence('Ctrl+W'), self, activated=lambda: self._close_tab(self.tabs.currentIndex()))
 
     # ---- toolbar ---------------------------------------------------------
@@ -146,6 +147,16 @@ class ViewerWorkspace(QWidget):
         b.clicked.connect(slot)
         return b
 
+    def _tool_btn(self, text, tip, slot, w=36, h=32, font_px=13):
+        """전체비교 PDF 뷰어 툴바(zoom_in_btn 등)와 같은 toolbarBtn 스타일."""
+        b = QPushButton(text)
+        b.setObjectName('toolbarBtn')
+        b.setFixedSize(w, h)
+        b.setStyleSheet(f'font-size: {font_px}px; padding: 0px; margin: 0px;')
+        b.setToolTip(tip)
+        b.clicked.connect(slot)
+        return b
+
     def _build_toolbar(self):
         bar = QFrame()
         bar.setObjectName('viewerToolbar')
@@ -155,7 +166,7 @@ class ViewerWorkspace(QWidget):
         self.btn_nav = self._btn('☰', '페이지 탐색 패널 접기/펼치기', self.toggle_nav, 32)
         bl.addWidget(self.btn_nav)
         bl.addSpacing(8)
-        bl.addWidget(self._btn('‹', '이전 페이지', lambda: self._step(-1), 30))
+        bl.addWidget(self._tool_btn('‹', '이전 페이지', lambda: self._step(-1), 32, 30, 14))
         self.page_edit = QLineEdit()
         self.page_edit.setObjectName('pageEdit')
         self.page_edit.setFixedWidth(46)
@@ -165,18 +176,21 @@ class ViewerWorkspace(QWidget):
         self.page_total = QLabel('/ 0')
         self.page_total.setObjectName('mutedLabel')
         bl.addWidget(self.page_total)
-        bl.addWidget(self._btn('›', '다음 페이지', lambda: self._step(1), 30))
+        bl.addWidget(self._tool_btn('›', '다음 페이지', lambda: self._step(1), 32, 30, 14))
         bl.addSpacing(12)
-        bl.addWidget(self._btn('−', '축소 (Ctrl+-)', lambda: self._cv() and self._cv().canvas.zoom_out(), 30))
+        bl.addWidget(self._tool_btn('🔍-', '축소 (Ctrl+-)', lambda: self._cv() and self._cv().canvas.zoom_out()))
         self.zoom_label = QLabel('100%')
         self.zoom_label.setObjectName('zoomLabel')
         self.zoom_label.setFixedWidth(48)
         self.zoom_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         bl.addWidget(self.zoom_label)
-        bl.addWidget(self._btn('+', '확대 (Ctrl+=)', lambda: self._cv() and self._cv().canvas.zoom_in(), 30))
-        bl.addWidget(self._btn('폭 맞춤', '페이지 폭에 맞춤', lambda: self._cv() and self._cv().canvas.set_fit('width')))
-        bl.addWidget(self._btn('쪽 맞춤', '한 페이지 전체 보기', lambda: self._cv() and self._cv().canvas.set_fit('page')))
+        bl.addWidget(self._tool_btn('🔍+', '확대 (Ctrl+=)', lambda: self._cv() and self._cv().canvas.zoom_in()))
+        bl.addWidget(self._tool_btn('↔', '너비에 맞춤', lambda: self._cv() and self._cv().canvas.set_fit('width'), font_px=14))
+        bl.addWidget(self._tool_btn('📄', '페이지에 맞춤', lambda: self._cv() and self._cv().canvas.set_fit('page'), font_px=14))
         bl.addStretch()
+        self.btn_print = self._btn('🖨 인쇄', '인쇄 / 확대·분할 / 모아찍기 (Ctrl+P)', self.print_current)
+        self.btn_print.setEnabled(False)
+        bl.addWidget(self.btn_print)
         bl.addWidget(self._btn('찾기', '문서에서 찾기 (Ctrl+F)', self.show_search))
         bl.addWidget(self._btn('전체 찾기', '열린 PDF 전체에서 찾기 (Ctrl+Shift+F)', self.show_global_search))
         self.mode_buttons = {}
@@ -418,8 +432,16 @@ class ViewerWorkspace(QWidget):
         if v:
             v.canvas.go_to_page(n - 1)
 
+    def print_current(self):
+        v = self._cv()
+        if v is None:
+            return
+        from app.shell.print_dialog import open_print_dialog  # lazy
+        open_print_dialog(self, v.canvas)
+
     def _sync_status(self, *_):
         v = self._cv()
+        self.btn_print.setEnabled(v is not None)
         if not v:
             self.page_edit.setText('')
             self.page_total.setText('/ 0')

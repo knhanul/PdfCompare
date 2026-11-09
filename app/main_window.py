@@ -1204,8 +1204,32 @@ def _close_splash_screen():
         pass
 
 
+from configs.settings import SETTINGS as _SETTINGS
+SETTINGS_TARGET_ID = 'Posid' if _SETTINGS.get('BUILD_TARGET') == 'posid' else str(_SETTINGS.get('BUILD_TARGET', 'App')).capitalize()
+
+
+def _set_app_user_model_id():
+    """작업표시줄이 python.exe 가 아닌 앱 고유 ID/아이콘으로 묶이도록 설정(Windows)."""
+    if os.name != 'nt':
+        return
+    try:
+        import ctypes
+        length = ctypes.c_uint32(0)
+        # 패키지(MSIX) 실행 중이면 OS가 부여한 AUMID를 그대로 사용 (15700 = 패키지 아님)
+        if ctypes.windll.kernel32.GetCurrentPackageFullName(ctypes.byref(length), None) != 15700:
+            return
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            f'{SETTINGS_TARGET_ID}.PdfCompare')
+    except Exception:
+        pass
+
+
 def run():
+    _set_app_user_model_id()
     app = QApplication.instance() or QApplication([])
+    _icon = get_icon_path()
+    if _icon:
+        app.setWindowIcon(QIcon(_icon))
     app.setFont(QFont('Malgun Gothic', 10))
     translator = QTranslator(app)
     if translator.load(QLocale(QLocale.Language.Korean), "qtbase", "_",
