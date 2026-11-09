@@ -374,6 +374,10 @@ class PdfEditorWidget(QWidget):
         if hasattr(self, 'progress'):
             style_task_progress(self.progress)
 
+    def add_paths(self, paths):
+        """뷰어 작업 패널 등 외부에서 파일 그리드에 경로를 추가할 때 사용."""
+        self._load_files(list(paths))
+
     def _load_files(self, paths):
         first_new = None
         for path in paths:

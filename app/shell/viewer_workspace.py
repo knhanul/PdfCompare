@@ -1,8 +1,8 @@
 """Tabbed viewer: tab bar + viewer toolbar + (nav | canvas) + form banner + search."""
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QKeySequence, QShortcut
-from PyQt6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QStackedWidget,
-                             QTabBar, QVBoxLayout, QWidget)
+from PyQt6.QtGui import QCursor, QKeySequence, QShortcut
+from PyQt6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QPushButton,
+                             QStackedWidget, QTabBar, QVBoxLayout, QWidget)
 
 from app.shell.global_search import GlobalSearchPanel
 from app.shell.work_panel import WorkPanel
@@ -68,7 +68,7 @@ class ViewerWorkspace(QWidget):
     tab_count_changed = pyqtSignal(int)
     current_changed = pyqtSignal(object)    # doc or None
     close_doc = pyqtSignal(str)
-    tool_requested = pyqtSignal(str, str)   # tool key, current path
+    tool_requested = pyqtSignal(str, str, int)   # tool key, current path, compare slot(0=없음,1/2=viewer)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -99,12 +99,6 @@ class ViewerWorkspace(QWidget):
         lay.addWidget(tab_row)
 
         lay.addWidget(self._build_toolbar())
-
-        self.search_bar = self._build_search()
-        lay.addWidget(self.search_bar)
-
-        self.mode_bar = self._build_mode_bar()
-        lay.addWidget(self.mode_bar)
 
         body = QHBoxLayout()
         body.setContentsMargins(0, 0, 0, 0)
@@ -166,7 +160,23 @@ class ViewerWorkspace(QWidget):
         self.btn_nav = self._btn('☰', '페이지 탐색 패널 접기/펼치기', self.toggle_nav, 32)
         bl.addWidget(self.btn_nav)
         bl.addSpacing(8)
-        bl.addWidget(self._tool_btn('‹', '이전 페이지', lambda: self._step(-1), 32, 30, 14))
+        # 전체비교와 동일한 순서: 확대, 축소, 너비, 페이지, 배율 입력, 페이지 이동
+        bl.addWidget(self._tool_btn('🔍+', '확대 (Ctrl+=)', lambda: self._cv() and self._cv().canvas.zoom_in()))
+        bl.addWidget(self._tool_btn('🔍-', '축소 (Ctrl+-)', lambda: self._cv() and self._cv().canvas.zoom_out()))
+        bl.addWidget(self._tool_btn('↔', '너비에 맞춤', lambda: self._cv() and self._cv().canvas.set_fit('width'), font_px=14))
+        bl.addWidget(self._tool_btn('📄', '페이지에 맞춤', lambda: self._cv() and self._cv().canvas.set_fit('page'), font_px=14))
+        self.zoom_label = QLineEdit('100%')
+        self.zoom_label.setObjectName('pageSpin')
+        self.zoom_label.setFixedSize(64, 30)
+        self.zoom_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.zoom_label.setStyleSheet('font-size: 12px;')
+        self.zoom_label.setToolTip('배율을 입력하세요. 예: 150')
+        self.zoom_label.editingFinished.connect(self._apply_zoom_input)
+        bl.addWidget(self.zoom_label)
+        bl.addSpacing(12)
+        page_lbl = QLabel('페이지')
+        page_lbl.setObjectName('toolbarLabel')
+        bl.addWidget(page_lbl)
         self.page_edit = QLineEdit()
         self.page_edit.setObjectName('pageEdit')
         self.page_edit.setFixedWidth(46)
@@ -176,22 +186,26 @@ class ViewerWorkspace(QWidget):
         self.page_total = QLabel('/ 0')
         self.page_total.setObjectName('mutedLabel')
         bl.addWidget(self.page_total)
-        bl.addWidget(self._tool_btn('›', '다음 페이지', lambda: self._step(1), 32, 30, 14))
-        bl.addSpacing(12)
-        bl.addWidget(self._tool_btn('🔍-', '축소 (Ctrl+-)', lambda: self._cv() and self._cv().canvas.zoom_out()))
-        self.zoom_label = QLabel('100%')
-        self.zoom_label.setObjectName('zoomLabel')
-        self.zoom_label.setFixedWidth(48)
-        self.zoom_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        bl.addWidget(self.zoom_label)
-        bl.addWidget(self._tool_btn('🔍+', '확대 (Ctrl+=)', lambda: self._cv() and self._cv().canvas.zoom_in()))
-        bl.addWidget(self._tool_btn('↔', '너비에 맞춤', lambda: self._cv() and self._cv().canvas.set_fit('width'), font_px=14))
-        bl.addWidget(self._tool_btn('📄', '페이지에 맞춤', lambda: self._cv() and self._cv().canvas.set_fit('page'), font_px=14))
+        bl.addWidget(self._tool_btn('◀', '이전 페이지', lambda: self._step(-1), 32, 30, 14))
+        bl.addWidget(self._tool_btn('▶', '다음 페이지', lambda: self._step(1), 32, 30, 14))
         bl.addStretch()
-        self.btn_print = self._btn('🖨 인쇄', '인쇄 / 확대·분할 / 모아찍기 (Ctrl+P)', self.print_current)
-        self.btn_print.setEnabled(False)
-        bl.addWidget(self.btn_print)
-        bl.addWidget(self._btn('찾기', '문서에서 찾기 (Ctrl+F)', self.show_search))
+        # 전체비교와 동일한 검색 셋트: 검색어 입력, 이전, 이후, 현재/총 건수
+        self.search_edit = QLineEdit()
+        self.search_edit.setObjectName('toolbarSearch')
+        self.search_edit.setPlaceholderText('검색어 입력')
+        self.search_edit.setFixedWidth(150)
+        self.search_edit.textChanged.connect(self._on_search_text_changed)
+        self.search_edit.returnPressed.connect(lambda: self._search_next(1))
+        bl.addWidget(self.search_edit)
+        bl.addWidget(self._tool_btn('이전', '이전 결과', lambda: self._search_next(-1), 50, 28, 11))
+        bl.addWidget(self._tool_btn('이후', '다음 결과', lambda: self._search_next(1), 50, 28, 11))
+        self.search_count_label = QLabel('0/0')
+        self.search_count_label.setObjectName('toolbarLabel')
+        self.search_count_label.setFixedWidth(60)
+        self.search_count_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.search_count_label.setStyleSheet('color: #8E8E93; font-size: 11px;')
+        bl.addWidget(self.search_count_label)
+        bl.addSpacing(8)
         bl.addWidget(self._btn('전체 찾기', '열린 PDF 전체에서 찾기 (Ctrl+Shift+F)', self.show_global_search))
         self.mode_buttons = {}
         for key, text, tip in (('info', '정보', '문서 정보 패널'), ('edit', '편집', '편집 작업 패널'),
@@ -202,43 +216,12 @@ class ViewerWorkspace(QWidget):
             bl.addWidget(b)
         self.mode_buttons['form'].hide()  # shown only for PDFs that contain form fields
         bl.addWidget(self._btn('두 PDF 동시 보기', '현재 문서와 다른 문서를 나란히 보기', self.split_requested.emit))
-        return bar
-
-    def _build_mode_bar(self):
-        """Situational toolbar: content depends on the active work mode."""
-        bar = QFrame()
-        bar.setObjectName('contextToolbar')
-        bl = QHBoxLayout(bar)
-        bl.setContentsMargins(8, 3, 8, 3)
-        bl.setSpacing(4)
-        self.mode_label = QLabel()
-        self.mode_label.setObjectName('mutedLabel')
-        bl.addWidget(self.mode_label)
-        bl.addSpacing(8)
-        self.mode_actions = {}
-        specs = {
-            'info': [('경로 복사', self._copy_path)],
-            'edit': [('PDF 편집', lambda: self._request_tool('pdf_editor')),
-                     ('PDF 생성', lambda: self._request_tool('pdf_create')),
-                     ('영역지정비교', lambda: self._request_tool('pdf_compare')),
-                     ('전체비교', lambda: self._request_tool('pdf_hf_compare'))],
-            'form': [('PDF 입력폼 관리', lambda: self._request_tool('pdf_form'))],
-        }
-        for mode, items in specs.items():
-            btns = []
-            for text, slot in items:
-                b = self._btn(text, text, slot)
-                bl.addWidget(b)
-                btns.append(b)
-            self.mode_actions[mode] = btns
-        bl.addStretch()
-        bl.addWidget(self._btn('작업 끝내기', '작업 패널 닫기', self.close_work_mode))
-        bar.hide()
+        self.btn_print = self._btn('🖨 인쇄', '인쇄 / 확대·분할 / 모아찍기 (Ctrl+P)', self.print_current)
+        self.btn_print.setEnabled(False)
+        bl.addWidget(self.btn_print)
         return bar
 
     # ---- work modes --------------------------------------------------------
-    MODE_LABELS = {'info': '문서 정보', 'edit': '편집 모드', 'form': '입력 항목 모드'}
-
     def toggle_work_mode(self, mode):
         if self.work_panel.mode == mode:
             self.close_work_mode()
@@ -249,17 +232,11 @@ class ViewerWorkspace(QWidget):
         if not self._cv():
             return
         self.work_panel.open_mode(mode, self.current_doc())
-        self.mode_label.setText(self.MODE_LABELS[mode])
-        for m, btns in self.mode_actions.items():
-            for b in btns:
-                b.setVisible(m == mode)
         for m, b in self.mode_buttons.items():
             b.setChecked(m == mode)
-        self.mode_bar.show()
 
     def close_work_mode(self):
         self.work_panel.close_panel()
-        self.mode_bar.hide()
         for b in self.mode_buttons.values():
             b.setChecked(False)
 
@@ -268,13 +245,19 @@ class ViewerWorkspace(QWidget):
 
     def _request_tool(self, key):
         d = self.current_doc()
-        self.tool_requested.emit(key, d.path if d else '')
-
-    def _copy_path(self):
-        from PyQt6.QtWidgets import QApplication
-        d = self.current_doc()
-        if d:
-            QApplication.clipboard().setText(d.path)
+        if key in ('pdf_compare', 'pdf_hf_compare'):
+            if not d:
+                return
+            menu = QMenu(self)
+            act1 = menu.addAction('PDF1에 넣기')
+            act2 = menu.addAction('PDF2에 넣기')
+            chosen = menu.exec(QCursor.pos())
+            if chosen is act1:
+                self.tool_requested.emit(key, d.path, 1)
+            elif chosen is act2:
+                self.tool_requested.emit(key, d.path, 2)
+            return
+        self.tool_requested.emit(key, d.path if d else '', 0)
 
     # ---- global search -----------------------------------------------------
     def show_global_search(self):
@@ -307,24 +290,6 @@ class ViewerWorkspace(QWidget):
             return self.add_document(doc, page)
         self.add_document(doc, page)
         self._close_tab(i)
-
-    def _build_search(self):
-        bar = QFrame()
-        bar.setObjectName('contextToolbar')
-        bl = QHBoxLayout(bar)
-        bl.setContentsMargins(8, 3, 8, 3)
-        self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText('문서에서 찾기…')
-        self.search_edit.returnPressed.connect(self._search_next)
-        self.search_info = QLabel('')
-        self.search_info.setObjectName('mutedLabel')
-        bl.addWidget(self.search_edit, 1)
-        bl.addWidget(self.search_info)
-        bl.addWidget(self._btn('이전', '이전 결과', lambda: self._search_next(-1)))
-        bl.addWidget(self._btn('다음', '다음 결과', lambda: self._search_next(1)))
-        bl.addWidget(self._btn('✕', '찾기 닫기', self.hide_search, 28))
-        bar.hide()
-        return bar
 
     # ---- docs ------------------------------------------------------------
     def _cv(self):
@@ -432,6 +397,19 @@ class ViewerWorkspace(QWidget):
         if v:
             v.canvas.go_to_page(n - 1)
 
+    def _apply_zoom_input(self):
+        v = self._cv()
+        text = self.zoom_label.text().strip().replace('%', '').replace('％', '')
+        try:
+            percent = float(text)
+        except ValueError:
+            percent = 0.0
+        if not v or percent <= 0:
+            self._sync_status()
+            return
+        v.canvas.set_zoom(percent / 100.0)   # set_zoom이 MIN/MAX_ZOOM으로 클램프
+        self._sync_status()
+
     def print_current(self):
         v = self._cv()
         if v is None:
@@ -442,31 +420,36 @@ class ViewerWorkspace(QWidget):
     def _sync_status(self, *_):
         v = self._cv()
         self.btn_print.setEnabled(v is not None)
+        self._update_search_count()
         if not v:
             self.page_edit.setText('')
             self.page_total.setText('/ 0')
             return
         self.page_edit.setText(str(v.canvas.current_page() + 1))
         self.page_total.setText(f'/ {v.canvas.page_count()}')
+        self.zoom_label.blockSignals(True)
         self.zoom_label.setText(f'{round(v.canvas.zoom * 100)}%')
+        self.zoom_label.blockSignals(False)
 
     def show_search(self):
-        self.search_bar.show()
         self.search_edit.setFocus()
         self.search_edit.selectAll()
 
     def hide_search(self):
-        self.search_bar.hide()
-        v = self._cv()
-        if v:
-            v.canvas.highlights = {}
-            v.canvas.viewport().update()
+        self.search_edit.clear()   # textChanged가 하이라이트·카운트를 정리
 
-    def _search_next(self, step=1):
+    def _on_search_text_changed(self, text):
         v = self._cv()
-        if not v:
+        text = text.strip()
+        if not v or not text:
+            if v:
+                v._last_query = None
+                v.search_hits = []
+                v.search_index = -1
+                v.canvas.highlights = {}
+                v.canvas.viewport().update()
+            self._update_search_count()
             return
-        text = self.search_edit.text().strip()
         if getattr(v, '_last_query', None) != text:
             v._last_query = text
             v.search_hits = v.doc.search(text)
@@ -475,12 +458,29 @@ class ViewerWorkspace(QWidget):
             for p, r in v.search_hits:
                 hl.setdefault(p, []).append(r)
             v.canvas.highlights = hl
-        if not v.search_hits:
-            self.search_info.setText('결과 없음')
             v.canvas.viewport().update()
+        self._update_search_count()
+
+    def _update_search_count(self):
+        v = self._cv()
+        total = len(v.search_hits) if v else 0
+        cur = v.search_index + 1 if total and v.search_index >= 0 else 0
+        self.search_count_label.setText(f'{cur}/{total}')
+
+    def _search_next(self, step=1):
+        v = self._cv()
+        if not v:
+            return
+        text = self.search_edit.text().strip()
+        if not text:
+            return
+        if getattr(v, '_last_query', None) != text:
+            self._on_search_text_changed(text)
+        if not v.search_hits:
+            self._update_search_count()
             return
         v.search_index = (v.search_index + step) % len(v.search_hits)
         page, rect = v.search_hits[v.search_index]
-        self.search_info.setText(f'{v.search_index + 1} / {len(v.search_hits)}')
+        self._update_search_count()
         v.canvas.go_to_page(page, rect[1])
         v.canvas.viewport().update()

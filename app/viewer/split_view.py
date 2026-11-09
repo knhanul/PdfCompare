@@ -4,8 +4,9 @@ This is *not* a comparison tool; it only shows two documents together.
 """
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QKeySequence, QShortcut
-from PyQt6.QtWidgets import (QCheckBox, QFrame, QHBoxLayout, QLabel, QMessageBox,
-                             QPushButton, QSplitter, QVBoxLayout, QWidget)
+from PyQt6.QtWidgets import (QCheckBox, QFrame, QHBoxLayout, QLabel, QLineEdit,
+                             QMessageBox, QPushButton, QSplitter, QVBoxLayout,
+                             QWidget)
 
 from PyQt6.QtCore import QTimer
 
@@ -39,12 +40,26 @@ class _Pane(QWidget):
         bar.setObjectName('splitPaneBar')
         bl = QHBoxLayout(bar)
         bl.setContentsMargins(8, 4, 8, 4)
+        # 전체비교와 동일한 순서: 확대, 축소, 너비에 맞춤, 페이지에 맞춤, 배율 입력
+        self.zoom_in_btn = self._tool_btn('🔍+', '확대', 13)
+        self.zoom_out_btn = self._tool_btn('🔍-', '축소', 13)
+        self.fit_width_btn = self._tool_btn('↔', '너비에 맞춤', 14)
+        self.fit_page_btn = self._tool_btn('📄', '페이지에 맞춤', 14)
+        self.zoom_label = QLineEdit('100%')
+        self.zoom_label.setObjectName('pageSpin')
+        self.zoom_label.setFixedSize(64, 30)
+        self.zoom_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.zoom_label.setStyleSheet('font-size: 12px;')
+        self.zoom_label.setToolTip('배율을 입력하세요. 예: 150')
         self.label = QLabel(title)
         self.label.setObjectName('splitPaneTitle')
         self.open_btn = QPushButton('열기…')
         self.open_btn.setObjectName('viewerToolBtn')
         self.page_label = QLabel('')
         self.page_label.setObjectName('mutedLabel')
+        for w in (self.zoom_in_btn, self.zoom_out_btn, self.fit_width_btn,
+                  self.fit_page_btn, self.zoom_label):
+            bl.addWidget(w)
         bl.addWidget(self.label, 1)
         bl.addWidget(self.page_label)
         bl.addWidget(self.open_btn)
@@ -52,6 +67,39 @@ class _Pane(QWidget):
         lay.addWidget(bar)
         lay.addWidget(self.canvas, 1)
         self.canvas.page_changed.connect(self._upd)
+        self.zoom_in_btn.clicked.connect(self.canvas.zoom_in)
+        self.zoom_out_btn.clicked.connect(self.canvas.zoom_out)
+        self.fit_width_btn.clicked.connect(lambda: self.canvas.set_fit('width'))
+        self.fit_page_btn.clicked.connect(lambda: self.canvas.set_fit('page'))
+        self.zoom_label.editingFinished.connect(self._apply_zoom_input)
+        self.canvas.zoom_changed.connect(lambda _z: self._update_zoom_label())
+
+    @staticmethod
+    def _tool_btn(text, tip, font_px):
+        """전체비교 툴바(zoom_in_btn 등)와 동일한 36x32 toolbarBtn."""
+        b = QPushButton(text)
+        b.setObjectName('toolbarBtn')
+        b.setFixedSize(36, 32)
+        b.setStyleSheet(f'font-size: {font_px}px; padding: 0px; margin: 0px;')
+        b.setToolTip(tip)
+        return b
+
+    def _update_zoom_label(self):
+        self.zoom_label.blockSignals(True)
+        self.zoom_label.setText(f'{int(round(self.canvas.zoom * 100))}%')
+        self.zoom_label.blockSignals(False)
+
+    def _apply_zoom_input(self):
+        text = self.zoom_label.text().strip().replace('%', '').replace('％', '')
+        try:
+            percent = float(text)
+        except ValueError:
+            percent = 0.0
+        if percent <= 0:
+            self._update_zoom_label()
+            return
+        self.canvas.set_zoom(percent / 100.0)
+        self._update_zoom_label()
 
     # ---- drag & drop: 드롭한 PDF를 이 뷰에서 연다 ----
     def _drag_highlight(self, on):
@@ -121,12 +169,6 @@ class SplitView(QWidget):
         self._toast_timer = QTimer(self)
         self._toast_timer.setSingleShot(True)
         self._toast_timer.timeout.connect(self._clear_toast)
-        btn_zo = self._tool_btn('🔍-', '축소', 13)
-        btn_zi = self._tool_btn('🔍+', '확대', 13)
-        btn_fit = self._tool_btn('↔', '너비에 맞춤', 14)
-        btn_fit.clicked.connect(lambda: [p.canvas.set_fit('width') for p in (self.left, self.right)])
-        btn_zo.clicked.connect(lambda: self.left.canvas.zoom_out())
-        btn_zi.clicked.connect(lambda: self.left.canvas.zoom_in())
         self.btn_print = QPushButton('🖨 인쇄')
         self.btn_print.setObjectName('viewerToolBtn')
         self.btn_print.setToolTip('두 PDF 인쇄 (Ctrl+P)')
@@ -137,13 +179,10 @@ class SplitView(QWidget):
         btn_cmp2 = QPushButton('전체비교로 열기')
         btn_cmp2.setObjectName('viewerToolBtn')
         btn_cmp2.clicked.connect(lambda: self.open_compare.emit('pdf_hf_compare'))
-        btn_close = QPushButton('✕ 닫기')
-        btn_close.setObjectName('viewerToolBtn')
-        btn_close.clicked.connect(self.closed.emit)
-        for w in (title, self.sync_scroll, self.btn_anchor, self.lbl_toast, self.sync_zoom, btn_zo, btn_zi, btn_fit):
+        for w in (title, self.sync_scroll, self.btn_anchor, self.lbl_toast, self.sync_zoom):
             bl.addWidget(w)
         bl.addStretch()
-        for w in (self.btn_print, btn_cmp, btn_cmp2, btn_close):
+        for w in (btn_cmp, btn_cmp2, self.btn_print):
             bl.addWidget(w)
         lay.addWidget(bar)
 
@@ -177,16 +216,6 @@ class SplitView(QWidget):
         self.btn_print.setEnabled(any(p.canvas.doc for p in (self.left, self.right)))
         if hasattr(self, 'lbl_toast'):
             self._refresh_anchor_ui()
-
-    @staticmethod
-    def _tool_btn(text, tip, font_px):
-        """전체비교 툴바(zoom_in_btn 등)와 동일한 36x32 toolbarBtn."""
-        b = QPushButton(text)
-        b.setObjectName('toolbarBtn')
-        b.setFixedSize(36, 32)
-        b.setStyleSheet(f'font-size: {font_px}px; padding: 0px; margin: 0px;')
-        b.setToolTip(tip)
-        return b
 
     def paths(self):
         return [p.canvas.doc.path if p.canvas.doc else None for p in (self.left, self.right)]

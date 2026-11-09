@@ -6,8 +6,8 @@ The panel never edits PDFs itself; it hands off to existing tools via signals.
 import os
 
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import (QFormLayout, QFrame, QHBoxLayout, QLabel, QListWidget, QPushButton,
-                             QStackedWidget, QVBoxLayout, QWidget)
+from PyQt6.QtWidgets import (QApplication, QFormLayout, QFrame, QHBoxLayout, QLabel, QListWidget,
+                             QPushButton, QStackedWidget, QVBoxLayout, QWidget)
 
 MODES = {'info': '문서 정보', 'edit': 'PDF 편집', 'form': '입력 항목'}
 
@@ -22,6 +22,7 @@ class WorkPanel(QFrame):
         self.setObjectName('workPanel')
         self.setFixedWidth(300)
         self.mode = None
+        self._doc = None
         lay = QVBoxLayout(self)
         lay.setContentsMargins(10, 8, 10, 10)
         head = QHBoxLayout()
@@ -50,14 +51,27 @@ class WorkPanel(QFrame):
 
     def _info_page(self):
         w = QWidget()
-        self.info_form = QFormLayout(w)
+        v = QVBoxLayout(w)
+        v.setContentsMargins(0, 0, 0, 0)
+        self.info_form = QFormLayout()
         self.info_labels = {}
         for k in ('파일', '폴더', '쪽수', '크기', '입력 항목'):
             lbl = QLabel('-')
             lbl.setWordWrap(True)
             self.info_labels[k] = lbl
             self.info_form.addRow(k, lbl)
+        v.addLayout(self.info_form)
+        copy_btn = QPushButton('경로 복사')
+        copy_btn.setObjectName('viewerToolBtn')
+        copy_btn.setToolTip('현재 문서의 전체 경로를 클립보드에 복사')
+        copy_btn.clicked.connect(self._copy_path)
+        v.addWidget(copy_btn)
+        v.addStretch()
         return w
+
+    def _copy_path(self):
+        if self._doc:
+            QApplication.clipboard().setText(self._doc.path)
 
     def _edit_page(self):
         w = QWidget()
@@ -69,6 +83,7 @@ class WorkPanel(QFrame):
         v.addWidget(self._btn('PDF 편집 열기', 'pdf_editor'))
         v.addWidget(self._btn('PDF 생성 (변환·추출)', 'pdf_create'))
         v.addWidget(self._btn('영역지정비교로 보내기', 'pdf_compare'))
+        v.addWidget(self._btn('전체비교로 보내기', 'pdf_hf_compare'))
         v.addStretch()
         return w
 
@@ -97,6 +112,7 @@ class WorkPanel(QFrame):
         self.hide()
 
     def refresh(self, doc):
+        self._doc = doc
         if doc is None:
             return
         if self.mode == 'info':

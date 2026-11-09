@@ -299,6 +299,10 @@ class PdfCreateWidget(QWidget):
         if path:
             self._add_paths([path])
 
+    def add_paths(self, paths):
+        """뷰어 작업 패널 등 외부에서 파일 그리드에 경로를 추가할 때 사용."""
+        self._add_paths(list(paths))
+
     def _add_paths(self, paths):
         added = 0
         self.file_table.setSortingEnabled(False)

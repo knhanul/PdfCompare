@@ -69,12 +69,12 @@ def test_work_panel_modes(win):
     v = w.viewer
     assert not v.work_panel.isVisible()  # closed by default
     v.toggle_work_mode('info')
-    assert v.work_panel.isVisible() and v.mode_bar.isVisible()
+    assert v.work_panel.isVisible()
     assert '3쪽' in v.work_panel.info_labels['쪽수'].text()
     v.open_work_mode('form')
     assert v.work_panel.field_list.count() == 1
     v.toggle_work_mode('form')
-    assert not v.work_panel.isVisible() and not v.mode_bar.isVisible()
+    assert not v.work_panel.isVisible()
 
 
 def test_command_palette_lists_tools_and_actions(win):

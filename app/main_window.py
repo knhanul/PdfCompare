@@ -8,7 +8,7 @@ from PyQt6.QtGui import QFont, QIcon, QKeySequence, QPixmap, QShortcut
 from PyQt6.QtWidgets import QApplication, QFileDialog, QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton, QScrollArea, QStackedWidget, QStyle, QVBoxLayout, QWidget
  
 from app.common.about_dialog import AboutDialog, get_about_info
-from app.common.resources import APP_NAME, DEVELOPER, VERSION, get_about_icon_path, get_icon_path, get_logo_path
+from app.common.resources import APP_NAME, DEVELOPER, get_about_icon_path, get_icon_path, get_logo_path
 from app.common.styles import COLOR_PRIMARY, MODERN_QSS
 from app.common.comparison_settings import ComparisonSettings
 from app.services import app_settings, recent_docs, workspace_session
@@ -25,7 +25,7 @@ SIDEBAR_COMPACT_WIDTH = 56
 class MdiMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f'{APP_NAME} v{VERSION}')
+        self.setWindowTitle(APP_NAME)
         self.setGeometry(50, 50, 1700, 1000)
         self.setAcceptDrops(True)
 
@@ -301,7 +301,7 @@ class MdiMainWindow(QMainWindow):
         # 현재 도구 닫기 버튼
         self.close_tool_btn = QPushButton('✕')
         self.close_tool_btn.setObjectName('closeToolBtn')
-        self.close_tool_btn.setToolTip('현재 도구 닫기 (프로그램은 종료되지 않습니다)')
+        self.close_tool_btn.setToolTip('현재 화면 닫기 (프로그램은 종료되지 않습니다)')
         self.close_tool_btn.clicked.connect(self.close_current_tool)
         header_layout.addWidget(self.close_tool_btn)
         header_layout.addSpacing(4)
@@ -803,7 +803,14 @@ class MdiMainWindow(QMainWindow):
             new_tool.switch_toggle.set_active(0 if tool_key == 'pdf_compare' else 1)
 
     def close_current_tool(self):
-        """현재 활성화된 도구 닫기"""
+        """현재 활성화된 도구·뷰어 화면 닫기"""
+        cur = self.mode_stack.currentWidget()
+        if cur is self.viewer:
+            self.show_welcome()
+            return
+        if self.split_view is not None and cur is self.split_view:
+            self.split_view.closed.emit()
+            return
         if not self.current_tool_widget:
             return
         if hasattr(self.current_tool_widget, 'confirm_discard_changes'):
@@ -881,10 +888,7 @@ class MdiMainWindow(QMainWindow):
         if key == 'home':
             self.show_welcome()
         elif key == 'viewer':
-            if self.viewer.count():
-                self.show_viewer()
-            else:
-                self.open_pdf_dialog()
+            self.show_viewer()
         elif key == 'split':
             self.open_split_view()
         elif key == 'settings':
@@ -947,25 +951,39 @@ class MdiMainWindow(QMainWindow):
         self.show_viewer()
         self.viewer.show_global_search()
 
-    def _on_viewer_tool_request(self, key, path):
+    def _on_viewer_tool_request(self, key, path, slot=0):
         if key == 'pdf_form' and path:
             self.open_form_for(path)
         elif key in ('pdf_compare', 'pdf_hf_compare') and path:
-            paths = [path]
-            others = [p for p in self.doc_manager.paths() if p != path]
-            if others:
-                from app.shell.open_doc_picker import pick_document
-                second = pick_document(
-                    self, self.doc_manager,
-                    title='비교할 두 번째 PDF 선택',
-                    exclude_paths=[path],
-                )
-                if second:
-                    paths.append(second)
             self.open_tool(key)
-            self._handoff_to_compare(paths)
+            self._load_into_compare_slot(path, slot)
+        elif key in ('pdf_editor', 'pdf_create') and path:
+            self.open_tool(key)
+            self._add_path_to_current_tool(path)
         else:
             self.open_tool(key)
+
+    def _load_into_compare_slot(self, path, slot):
+        """영역지정/전체비교의 viewer1|viewer2 한쪽에 현재 PDF를 넣는다."""
+        tool = self.current_tool_widget
+        viewer = getattr(tool, 'viewer2' if slot == 2 else 'viewer1', None)
+        if viewer is None or not hasattr(viewer, 'load_pdf'):
+            return
+        try:
+            if viewer.load_pdf(path) and hasattr(viewer, 'update_loaded_pdf_label'):
+                viewer.update_loaded_pdf_label(path)
+        except Exception as e:
+            QMessageBox.warning(self, 'PDF 열기 실패', str(e))
+
+    def _add_path_to_current_tool(self, path):
+        """현재 도구의 파일 그리드에 열려 있는 PDF를 추가한다 (기존 목록에 이어서)."""
+        add = getattr(self.current_tool_widget, 'add_paths', None)
+        if not callable(add):
+            return
+        try:
+            add([path])
+        except Exception as e:
+            QMessageBox.warning(self, '파일 추가 실패', str(e))
 
     def palette_commands(self):
         cmds = [
@@ -1023,7 +1041,6 @@ class MdiMainWindow(QMainWindow):
     def _update_title(self, doc):
         if self.mode_stack.currentWidget() is self.viewer:
             self.header_title.setText(doc.title if doc else 'PDF 보기')
-            self.setWindowTitle(f'{doc.title} — {APP_NAME}' if doc else f'{APP_NAME} v{VERSION}')
 
     def open_pdf_dialog(self):
         paths, _ = QFileDialog.getOpenFileNames(self, 'PDF 열기', '', 'PDF 파일 (*.pdf)')
