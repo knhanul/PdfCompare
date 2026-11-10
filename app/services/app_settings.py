@@ -13,6 +13,11 @@ DEFAULTS = {
     'perf/render_threads': 2,
     'ui/auto_compact_sidebar': True,     # icon sidebar on narrow windows
     'ui/compact_threshold': 1500,        # window width (logical px)
+    'presentation/ratio_pct': 75,        # 구간 이동 비율(%) 50|75|90
+    'presentation/basis': 'viewport',    # 'viewport' | 'page'
+    'presentation/page_parts': 3,        # 페이지 N등분(2~4)
+    'presentation/animate': True,        # 이동 애니메이션
+    'presentation/auto_speed': 60,       # 자동 스크롤 px/s
 }
 _BOOL = {k for k, v in DEFAULTS.items() if isinstance(v, bool)}
 _INT = {k for k, v in DEFAULTS.items() if isinstance(v, int) and not isinstance(v, bool)}

@@ -129,6 +129,9 @@ class ViewerWorkspace(QWidget):
         QShortcut(QKeySequence('Ctrl+='), self, activated=lambda: self._cv() and self._cv().canvas.zoom_in())
         QShortcut(QKeySequence('Ctrl+-'), self, activated=lambda: self._cv() and self._cv().canvas.zoom_out())
         QShortcut(QKeySequence('Ctrl+P'), self, activated=self.print_current)
+        QShortcut(QKeySequence('F5'), self, activated=lambda: self.start_presentation(False))
+        QShortcut(QKeySequence('Shift+F5'), self, activated=lambda: self.start_presentation(True))
+        self._presentation = None
         QShortcut(QKeySequence('Ctrl+W'), self, activated=lambda: self._close_tab(self.tabs.currentIndex()))
 
     # ---- toolbar ---------------------------------------------------------
@@ -409,6 +412,26 @@ class ViewerWorkspace(QWidget):
             return
         v.canvas.set_zoom(percent / 100.0)   # set_zoom이 MIN/MAX_ZOOM으로 클램프
         self._sync_status()
+
+    def _presentation_open(self):
+        try:
+            return self._presentation is not None and self._presentation.isVisible()
+        except RuntimeError:     # 창이 이미 삭제됨
+            self._presentation = None
+            return False
+
+    def start_presentation(self, from_start=False):
+        """현재 문서를 전체화면 발표모드로 연다. 작업 화면의 캔버스 상태는 변경되지 않는다."""
+        v = self._cv()
+        if v is None or self._presentation_open():
+            return None
+        from app.presentation.context import context_from_canvas  # lazy
+        from app.presentation.window import start_presentation
+        win = start_presentation(context_from_canvas(v.canvas, from_start), self.window())
+        self._presentation = win
+        if win is not None:
+            win.closed.connect(lambda: setattr(self, '_presentation', None))
+        return win
 
     def print_current(self):
         v = self._cv()

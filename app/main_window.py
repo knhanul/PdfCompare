@@ -311,11 +311,29 @@ class MdiMainWindow(QMainWindow):
         self.header_focus_btn = QPushButton('집중모드')
         self.header_focus_btn.setObjectName('headerFocusBtn')
         self.header_focus_btn.setCheckable(True)
-        self.header_focus_btn.clicked.connect(self.toggle_sidebar)
+        self.header_focus_btn.clicked.connect(self._on_header_focus_clicked)
         header_layout.addWidget(self.header_focus_btn)
         self.header_layout = header_layout
         self._sync_header_focus_button()
         return header
+
+    def _presentation_target(self):
+        """PDF 보기 / 두 PDF 동시보기 화면이면 발표모드를 시작할 수 있는 위젯, 아니면 None."""
+        stack = getattr(self, 'mode_stack', None)
+        w = stack.currentWidget() if stack is not None else None
+        if w is None:
+            return None
+        if w is self.viewer or (getattr(self, 'split_view', None) is not None and w is self.split_view):
+            return w
+        return None
+
+    def _on_header_focus_clicked(self):
+        target = None if self.focus_mode else self._presentation_target()
+        if target is not None:
+            target.start_presentation(False)
+            self.header_focus_btn.setChecked(False)
+        else:
+            self.toggle_sidebar()
 
     def toggle_sidebar(self):
         self.focus_mode = not self.focus_mode
@@ -358,7 +376,8 @@ class MdiMainWindow(QMainWindow):
 
     def _sync_header_focus_button(self):
         button = self.header_focus_btn
-        label = '일반 모드로 전환' if self.focus_mode else '집중 모드로 전환'
+        present = not self.focus_mode and self._presentation_target() is not None
+        label = '일반 모드로 전환' if self.focus_mode else ('발표모드 시작 (F5)' if present else '집중 모드로 전환')
         button.setProperty('floating', self.focus_mode)
         if self.focus_mode:
             button.setText('')
@@ -366,7 +385,7 @@ class MdiMainWindow(QMainWindow):
             button.setIconSize(QSize(16, 16))
             button.setFixedSize(28, 28)
         else:
-            button.setText('집중모드')
+            button.setText('발표모드' if present else '집중모드')
             button.setIcon(QIcon())
             button.setMinimumSize(0, 0)
             button.setMaximumSize(16777215, 16777215)
@@ -945,6 +964,8 @@ class MdiMainWindow(QMainWindow):
                 self.update_sidebar_compact()
 
     def _on_stack_changed(self, _idx):
+        if hasattr(self, 'header_focus_btn'):
+            self._sync_header_focus_button()
         if self._print_page is not None and self.mode_stack.currentWidget() is not self._print_page:
             self._drop_print_page()
 
@@ -1085,7 +1106,9 @@ class MdiMainWindow(QMainWindow):
             {'title': '편집 작업 패널', 'keywords': 'edit',
              'run': lambda: self._viewer_mode('edit')},
             {'title': '설정', 'keywords': 'settings 옵션 캐시 테마', 'shortcut': 'Ctrl+,', 'run': self.show_settings},
-            {'title': '집중모드 전환', 'keywords': 'focus', 'run': self.toggle_sidebar},
+            {'title': '발표모드 시작', 'keywords': 'presentation 발표 슬라이드쇼 F5',
+             'run': lambda: self._presentation_target() and self._presentation_target().start_presentation(False)},
+            {'title': '집중모드 전환 (사이드바 숨김)', 'keywords': 'focus', 'run': self.toggle_sidebar},
             {'title': '사이드바 아이콘으로 줄이기/펼치기', 'keywords': 'sidebar compact', 'run': self.toggle_sidebar_compact},
             {'title': '지난 작업 복원', 'keywords': 'restore session', 'run': self.restore_session},
         ]

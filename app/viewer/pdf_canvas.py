@@ -26,6 +26,11 @@ class PdfCanvas(QAbstractScrollArea):
         self._content_w = 0
         self._current_page = 0
         self.highlights = {}  # page -> list of rects (pt)
+        # 발표모드 캔버스가 덮어쓸 수 있도록 인스턴스 속성으로 노출 (기본값은 기존 상수)
+        self.margin = MARGIN
+        self.page_gap = PAGE_GAP
+        self.bg_color = CANVAS_BG
+        self.probe_ratio = 1.0 / 3.0   # 현재 페이지 판정 기준(뷰포트 세로 비율)
         self._service = render_service()
         self._service.rendered.connect(self._on_rendered)
         self.viewport().setAutoFillBackground(False)
@@ -54,15 +59,15 @@ class PdfCanvas(QAbstractScrollArea):
         if self.fit_mode:
             self._apply_fit()
         s = self._scale()
-        y = MARGIN
+        y = self.margin
         self._tops = []
         maxw = 0
         for w, h in self.doc.page_sizes:
             self._tops.append(y)
-            y += h * s + PAGE_GAP
+            y += h * s + self.page_gap
             maxw = max(maxw, w * s)
-        self._content_w = int(maxw + 2 * MARGIN)
-        total_h = int(y + MARGIN)
+        self._content_w = int(maxw + 2 * self.margin)
+        total_h = int(y + self.margin)
         vp = self.viewport().size()
         self.verticalScrollBar().setRange(0, max(0, total_h - vp.height()))
         self.verticalScrollBar().setPageStep(vp.height())
@@ -77,9 +82,9 @@ class PdfCanvas(QAbstractScrollArea):
         idx = min(self._current_page, len(self.doc.page_sizes) - 1)
         w, h = self.doc.page_sizes[idx]
         k = 72.0 / 96.0
-        zw = (vp.width() - 2 * MARGIN) / w * k
+        zw = (vp.width() - 2 * self.margin) / w * k
         if self.fit_mode == 'page':
-            zh = (vp.height() - 2 * MARGIN) / h * k
+            zh = (vp.height() - 2 * self.margin) / h * k
             zw = min(zw, zh)
         z = max(self.MIN_ZOOM, min(self.MAX_ZOOM, zw))
         if abs(z - self.zoom) > 1e-3:
@@ -122,18 +127,18 @@ class PdfCanvas(QAbstractScrollArea):
         if not self._tops:
             return
         index = max(0, min(index, len(self._tops) - 1))
-        y = self._tops[index] - MARGIN
+        y = self._tops[index] - self.margin
         if y_pt is not None:
-            y = self._tops[index] + y_pt * self._scale() - self.viewport().height() / 3
+            y = self._tops[index] + y_pt * self._scale() - self.viewport().height() * self.probe_ratio
         self.verticalScrollBar().setValue(int(y))
 
     def position(self):
         """(page + fraction within page, horizontal ratio) — zoom independent."""
         if not self._tops:
             return (0.0, 0.0)
-        y = self.verticalScrollBar().value() + MARGIN
+        y = self.verticalScrollBar().value() + self.margin
         i = self._page_at(y)
-        h = self.doc.page_sizes[i][1] * self._scale() + PAGE_GAP
+        h = self.doc.page_sizes[i][1] * self._scale() + self.page_gap
         frac = (y - self._tops[i]) / h if h else 0
         hs = self.horizontalScrollBar()
         hr = hs.value() / hs.maximum() if hs.maximum() else 0.0
@@ -144,8 +149,8 @@ class PdfCanvas(QAbstractScrollArea):
             return
         i = int(pos)
         i = max(0, min(i, len(self._tops) - 1))
-        h = self.doc.page_sizes[i][1] * self._scale() + PAGE_GAP
-        self.verticalScrollBar().setValue(int(self._tops[i] + (pos - i) * h - MARGIN))
+        h = self.doc.page_sizes[i][1] * self._scale() + self.page_gap
+        self.verticalScrollBar().setValue(int(self._tops[i] + (pos - i) * h - self.margin))
         hs = self.horizontalScrollBar()
         hs.setValue(int(hratio * hs.maximum()))
 
@@ -161,27 +166,30 @@ class PdfCanvas(QAbstractScrollArea):
 
     def _on_scroll(self, *_):
         if self._tops:
-            y = self.verticalScrollBar().value() + self.viewport().height() / 3
+            y = self.verticalScrollBar().value() + self.viewport().height() * self.probe_ratio
             p = self._page_at(y)
             if p != self._current_page:
                 self._current_page = p
                 self.page_changed.emit(p)
-        self.scrolled.emit(*self.position())
+        self._emit_scrolled()
         self.viewport().update()
+
+    def _emit_scrolled(self):
+        self.scrolled.emit(*self.position())
 
     # ---- painting ----------------------------------------------------------
     def _page_rect(self, i):
         s = self._scale()
         w, h = self.doc.page_sizes[i]
         pw = w * s
-        x = max(MARGIN, (max(self._content_w, self.viewport().width()) - pw) / 2)
+        x = max(self.margin, (max(self._content_w, self.viewport().width()) - pw) / 2)
         x -= self.horizontalScrollBar().value()
         y = self._tops[i] - self.verticalScrollBar().value()
         return QRectF(x, y, pw, h * s)
 
     def paintEvent(self, event):
         p = QPainter(self.viewport())
-        p.fillRect(self.viewport().rect(), CANVAS_BG)
+        p.fillRect(self.viewport().rect(), self.bg_color)
         if not self.doc or not self._tops:
             p.setPen(QColor('#77706D'))
             p.drawText(self.viewport().rect(), Qt.AlignmentFlag.AlignCenter, 'PDF 파일을 열어 주세요')

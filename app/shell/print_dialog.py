@@ -12,7 +12,7 @@ from PyQt6.QtCore import QObject, QPoint, QRect, QSize, QThread, Qt, QTimer, pyq
 from PyQt6.QtGui import QColor, QIcon, QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PyQt6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFormLayout,
-    QGroupBox, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
+    QGridLayout, QGroupBox, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
     QStackedWidget, QTabBar, QPushButton, QScrollArea, QSpinBox, QVBoxLayout,
     QWidget,
 )
@@ -25,6 +25,7 @@ from app.print_engine.stream import StreamSide
 from app.common import print_output
 from app.services import print_presets
 from app.shell.alignment_dialog import AlignSide, AlignmentView
+from app.shell import print_cards as pc
 
 
 class PrintSource:
@@ -403,34 +404,42 @@ class SmartPrintDialog(QWidget):
         self._trim_cache = {}
         self.lbl_spec_err = QLabel(''); self.lbl_spec_err.setObjectName('mutedLabel'); self.lbl_spec_err.setWordWrap(True)
         self._fill_n()
-        if self.dual:
-            form.addRow('출력 대상', self.cmb_target)
-        form.addRow('출력 방식', self.cmb_mode)
-        form.addRow('용지', self.cmb_sheet)
-        form.addRow('페이지', self.cmb_range)
+        self.cmb_mode.setParent(panel); self.cmb_mode.hide()      # 상태 보관용(선택 UI는 카드)
+        rows = {}
+        def add(name, *args):
+            form.addRow(*args)
+            rows[name] = args[-1]
+        add('target', '출력 대상', self.cmb_target)
+        add('sheet', '용지', self.cmb_sheet)
+        add('range', '페이지', self.cmb_range)
         rr = QHBoxLayout(); rr.addWidget(self.sp_from); rr.addWidget(QLabel('~')); rr.addWidget(self.sp_to)
-        form.addRow('범위', rr)
-        form.addRow('조합', self.ed_spec)
-        form.addRow('영역 배율', self.cmb_fit)
-        form.addRow('사용자 배율', self.sp_scale)
-        form.addRow(self.btn_pick)
-        form.addRow(self.btn_clear_region)
-        form.addRow(self.lbl_region)
+        add('rangebox', '범위', rr)
+        add('spec', '조합', self.ed_spec)
+        add('specerr', self.lbl_spec_err)
+        add('n', '매수 (분할/모아찍기)', self.cmb_n)
+        add('order', '배치 순서', self.cmb_order)
+        add('gutter', '간격', self.sp_gutter)
+        add('overlap', '분할 겹침', self.sp_overlap)
+        add('marks', self.chk_marks)
+        add('fit', '영역 배율', self.cmb_fit)
+        add('scale', '사용자 배율', self.sp_scale)
+        add('pick', self.btn_pick)
+        add('clear', self.btn_clear_region)
+        add('region', self.lbl_region)
         for k, t in (('t', '여백 조정 위'), ('b', '아래'), ('l', '왼쪽'), ('r', '오른쪽')):
-            form.addRow(t, self.trim_sp[k])
-        form.addRow('제본', self.cmb_bind)
-        form.addRow(self.lbl_spec_err)
-        form.addRow('매수 (분할/모아찍기)', self.cmb_n)
-        form.addRow('배치 순서', self.cmb_order)
-        form.addRow('간격', self.sp_gutter)
-        form.addRow(self.chk_border)
-        form.addRow(self.chk_numbers)
-        form.addRow('여백', self.sp_margin)
-        form.addRow('프린터', self.cmb_printer)
-        form.addRow(self.chk_hw)
-        form.addRow(self.lbl_printer)
-        form.addRow('분할 겹침', self.sp_overlap)
-        form.addRow(self.chk_marks)
+            add('trim_' + k, t, self.trim_sp[k])
+        add('bind', '제본', self.cmb_bind)
+        self.btn_adv = QPushButton('고급 설정 ▸'); self.btn_adv.setObjectName('printLink')
+        self.btn_adv.setCheckable(True)
+        add('adv', self.btn_adv)
+        add('border', self.chk_border)
+        add('numbers', self.chk_numbers)
+        add('margin', '여백', self.sp_margin)
+        add('printer', '프린터', self.cmb_printer)
+        add('hw', self.chk_hw)
+        add('printernote', self.lbl_printer)
+        self._form, self._rows = form, rows
+        self.btn_adv.toggled.connect(self._on_option)
         # 프리셋 (방식/용지/배율/여백/레이아웃만 저장 — 문서별 좌표·페이지는 제외)
         pre = QHBoxLayout()
         self.cmb_preset = QComboBox()
@@ -442,7 +451,9 @@ class SmartPrintDialog(QWidget):
         self.cmb_preset.activated.connect(self._on_preset)
         self.btn_preset_save.clicked.connect(self.save_preset)
         self.btn_preset_del.clicked.connect(self.delete_preset)
+        self._build_cards(pl)
         pl.addWidget(form_box)
+        form_box.setTitle('설정')
 
         # 나란히 출력용 정렬 패널 (확장/접기 가능)
         self.align_box = QGroupBox('시작 위치 정렬')
@@ -519,6 +530,166 @@ class SmartPrintDialog(QWidget):
         self.thumbs.currentRowChanged.connect(self._thumb_selected)
         self._on_option()
 
+    # ── 목적별 출력 카드 / 동적 설정 ──
+    def _build_cards(self, pl):
+        box = QGroupBox()
+        box.setStyleSheet(pc.CARD_STYLE)
+        v = QVBoxLayout(box)
+        h = QLabel('어떤 형태로 출력할까요?'); f = h.font(); f.setBold(True); f.setPointSizeF(f.pointSizeF() + 1); h.setFont(f)
+        sub = QLabel('원하는 결과를 선택하면 알맞은 설정을 자동으로 준비합니다.')
+        sub.setObjectName('mutedLabel'); sub.setWordWrap(True)
+        v.addWidget(h); v.addWidget(sub)
+        self._cards = {}       # key -> 버튼 (카드 + 추가 항목)
+        self._items = {}       # key -> (target, mode)
+        grid = QGridLayout(); grid.setSpacing(6)
+        prim = pc.DUAL_PRIMARY if self.dual else pc.SINGLE_PRIMARY
+        more = pc.DUAL_MORE if self.dual else pc.SINGLE_MORE
+        for i, (key, title, desc, tgt, mode) in enumerate(prim):
+            c = pc.Card(key, title, desc, key)
+            c.clicked.connect(lambda _=False, k=key: self._on_card(k))
+            self._cards[key] = c; self._items[key] = (tgt, mode)
+            grid.addWidget(c, i // 2, i % 2)
+        v.addLayout(grid)
+        self.btn_more = QPushButton('더 많은 출력 방식 ▾'); self.btn_more.setObjectName('printLink')
+        self.btn_more.setCheckable(True)
+        v.addWidget(self.btn_more)
+        self.more_box = QWidget(); ml = QVBoxLayout(self.more_box); ml.setContentsMargins(0, 0, 0, 0); ml.setSpacing(4)
+        for key, title, tgt, mode in more:
+            b = QPushButton(title); b.setObjectName('printMore'); b.setCheckable(True)
+            b.clicked.connect(lambda _=False, k=key: self._on_card(k, collapse=True))
+            self._cards[key] = b; self._items[key] = (tgt, mode)
+            ml.addWidget(b)
+        self.more_box.hide()
+        self.btn_more.toggled.connect(self.more_box.setVisible)
+        self.btn_more.toggled.connect(lambda on: self.btn_more.setText('더 많은 출력 방식 ' + ('▴' if on else '▾')))
+        v.addWidget(self.more_box)
+        self.lbl_current = QLabel(''); self.lbl_current.setObjectName('mutedLabel'); self.lbl_current.setWordWrap(True)
+        v.addWidget(self.lbl_current)
+        # 예상 결과
+        self.res_box = QGroupBox('예상 결과')
+        rl = QHBoxLayout(self.res_box)
+        self.diagram = pc.Diagram()
+        rv = QVBoxLayout()
+        self.lbl_result = QLabel(''); fb = self.lbl_result.font(); fb.setBold(True); self.lbl_result.setFont(fb)
+        self.lbl_result.setWordWrap(True)
+        self.lbl_tagline = QLabel(''); self.lbl_tagline.setWordWrap(True); self.lbl_tagline.setObjectName('mutedLabel')
+        rv.addWidget(self.lbl_result); rv.addWidget(self.lbl_tagline)
+        rl.addWidget(self.diagram); rl.addLayout(rv, 1)
+        pl.addWidget(box)
+        pl.addWidget(self.res_box)
+
+    def card_key(self):
+        """현재 (target, mode)에 해당하는 카드/항목 key."""
+        mode = self.cmb_mode.currentData()
+        if not self.dual:
+            return mode
+        t = self._target()
+        if t in PAIR_TARGETS:
+            return t
+        return {'split': 'ind_split', 'nup': 'ind_nup'}.get(mode, t)
+
+    def _on_card(self, key, collapse=False):
+        tgt, mode = self._items[key]
+        if tgt is not None and self.dual:
+            self.cmb_target.setCurrentIndex(self.cmb_target.findData(tgt))
+        if mode is not None:
+            i = self.cmb_mode.findData(mode)
+            if i >= 0:
+                self.cmb_mode.setCurrentIndex(i)
+        if key == 'a3' and self.cmb_sheet.currentText() == 'A4':
+            self.cmb_sheet.setCurrentIndex(self.cmb_sheet.findText('A3'))   # 크게 인쇄 기본 용지
+        if collapse:
+            self.btn_more.setChecked(False)
+        self._on_option()
+
+    def _sync_cards(self):
+        cur = self.card_key()
+        for k, b in self._cards.items():
+            b.setChecked(k == cur)
+        b = self._cards.get(cur)
+        title = (b.t.text() if isinstance(b, pc.Card) else b.text()) if b else ''
+        self.lbl_current.setText(f'선택한 출력 방식: {title}')
+        self.diagram.set_state(cur, self.cmb_n.currentData() or 4)
+        self.lbl_tagline.setText(pc.TAGLINES.get(cur, ''))
+
+    def _apply_visibility(self):
+        mode = self.cmb_mode.currentData()
+        t = self._target()
+        pair = t in PAIR_TARGETS
+        adv = self.btn_adv.isChecked()
+        self.btn_adv.setText('고급 설정 ' + ('▾' if adv else '▸'))
+        single = not pair
+        rng = self.cmb_range.currentData()
+        fit = self.cmb_fit.currentData()
+        v = {
+            'target': self.dual and t in ('L', 'R'),
+            'sheet': True,
+            'range': single and mode != 'region',
+            'rangebox': single and mode != 'region' and rng == 'range',
+            'spec': single and mode != 'region' and rng == 'spec',
+            'specerr': single and mode != 'region' and rng == 'spec',
+            'n': single and mode in ('split', 'nup'),
+            'order': single and mode == 'nup',
+            'gutter': single and mode == 'nup',
+            'overlap': single and mode in ('split', 'long'),
+            'marks': single and mode in ('split', 'long'),
+            'fit': single and mode == 'region',
+            'scale': single and mode == 'region' and fit == 'scale',
+            'pick': single and mode == 'region',
+            'clear': single and mode == 'region',
+            'region': single and mode == 'region',
+            'bind': single and mode == 'booklet',
+            'adv': True,
+            'border': adv and single and mode == 'nup',
+            'numbers': adv and single and mode == 'nup',
+            'margin': adv, 'printer': adv, 'hw': adv, 'printernote': adv,
+        }
+        for k in 'tblr':
+            v['trim_' + k] = single and mode == 'trim'
+        for name, w in self._rows.items():
+            self._form.setRowVisible(w, bool(v.get(name, False)))
+        lab = self._form.labelForField(self.cmb_n)
+        if lab is not None:
+            lab.setText('분할 장수' if mode == 'split' else '한 장에 넣을 페이지')
+
+    @staticmethod
+    def _paper_name(w, h):
+        x, y = sorted((w, h))
+        for name, (a, b) in (('A4', (595, 842)), ('A3', (842, 1191)), ('B4', (709, 1001)), ('A5', (420, 595))):
+            if abs(x - a) / a < 0.03 and abs(y - b) / b < 0.03:
+                return name
+        return None
+
+    def _update_result(self):
+        """실제 계획(plan) 계산 결과로 예상 결과 문구를 만든다."""
+        plan = self._plan
+        if plan is None or not plan.sheets:
+            self.lbl_result.setText('')
+            return
+        key = self.card_key()
+        sh = plan.sheets[0]
+        out = self._paper_name(sh.width, sh.height) or self.cmb_sheet.currentText()
+        n_out = len(plan.sheets)
+        n_in = getattr(self, '_n_in', (0,))
+        src = ''
+        wh = getattr(self, '_src_wh', None)
+        if wh and len(n_in) == 1:
+            src = (self._paper_name(*wh) or '원본') + ' '
+        if self._target() in PAIR_TARGETS:
+            txt = f'원본 {n_in[0]}페이지 + 수정본 {n_in[1]}페이지 → {out} {n_out}장'
+            if self._target() == 'side':
+                txt += ' (좌우 배치)'
+            elif self._target() == 'fb':
+                txt += ' (양면)'
+        elif key == 'region':
+            txt = f'선택 영역 → {out} {n_out}장'
+        elif key == 'booklet':
+            txt = f'{src}{n_in[0]}페이지 → {out} {n_out}면 ({(n_out + 1) // 2}장 양면)'
+        else:
+            txt = f'{src}{n_in[0]}페이지 → {out} {n_out}장'
+        self.lbl_result.setText(txt)
+        self.diagram.set_state(key, self.cmb_n.currentData() or 4)
+
     # ── 문서 ──
     def _open_sources(self, left, right):
         self._data, self._titles = {}, {}
@@ -582,7 +753,6 @@ class SmartPrintDialog(QWidget):
             self._close_alignment()
         mode = self.cmb_mode.currentData()
         self._fill_n()
-        self.cmb_sheet.setEnabled(mode != 'a3' or pair)
         self.cmb_n.setEnabled(mode in ('split', 'nup') and not pair)
         self.sp_overlap.setEnabled(mode in ('split', 'long') and not pair)
         self.chk_marks.setEnabled(mode in ('split', 'long') and not pair)
@@ -602,7 +772,8 @@ class SmartPrintDialog(QWidget):
         rng = self.cmb_range.currentData()
         self.sp_from.setEnabled(rng == 'range' and not pair); self.sp_to.setEnabled(rng == 'range' and not pair)
         self.ed_spec.setEnabled(rng == 'spec' and not pair)
-        notes = {'booklet': '소책자: 가로 용지 양면 인쇄(짧은 변 기준 뒤집기)로 출력한 뒤 반으로 접으세요. '
+        notes = {'a3': '크게 인쇄: 선택한 용지(기본 A3)에 맞춰 확대합니다. 프린터가 A3를 지원하지 않으면 B4 등 지원 용지를 선택하세요.',
+                 'booklet': '소책자: 가로 용지 양면 인쇄(짧은 변 기준 뒤집기)로 출력한 뒤 반으로 접으세요. '
                             '프린터 급지 방향이 다르면 PDF로 저장해 앞면/뒷면을 따로 인쇄하며 확인하세요.',
                  'trim': '여백 제거는 원본을 수정하지 않고 인쇄 영역만 잘라 확대합니다. 배경색이 있는 문서는 '
                          '전체가 내용으로 감지될 수 있으니 위/아래/좌/우 조정값으로 보정하세요.'}
@@ -620,6 +791,8 @@ class SmartPrintDialog(QWidget):
         for sp in (self.sp_from, self.sp_to):
             sp.blockSignals(True); sp.setMaximum(n); sp.blockSignals(False)
         self._update_printer_note()
+        self._sync_cards()
+        self._apply_visibility()
         self._schedule()
 
     # ── 프린터 / 인쇄 불가 영역 ──
@@ -804,6 +977,8 @@ class SmartPrintDialog(QWidget):
         elif 'mode' in d and self._target() in PAIR_TARGETS:
             pass
         pick(self.cmb_sheet, 'sheet', '용지')
+        if d.get('mode') == 'a3' and 'sheet' not in d:
+            self.cmb_sheet.setCurrentIndex(self.cmb_sheet.findText('A3'))
         self._fill_n()
         pick(self.cmb_n, 'n', '매수')
         for key, w in (('margin', self.sp_margin), ('overlap', self.sp_overlap), ('gutter', self.sp_gutter),
@@ -1000,10 +1175,12 @@ class SmartPrintDialog(QWidget):
             li = self._srcs['L'].infos()[self.align['L'][0]:]
             ri = self._srcs['R'].infos()[self.align['R'][0]:]
             sheet = self.cmb_sheet.currentText()
+            self._n_in = (len(li), len(ri))
             plan = build_pairs_plan('interleave' if target == 'inter' else 'front_back', li, ri,
                                     sheet=sheet, margins=margins)
             return plan, {'L': self._srcs['L'], 'R': self._srcs['R']}
         if target == 'side':
+            self._n_in = (self._srcs['L'].page_count - self.align['L'][0], self._srcs['R'].page_count - self.align['R'][0])
             lay = StreamLayout(sheet=self.cmb_sheet.currentText(), landscape=True, margins=margins)
             plan = plan_side_by_side(self._stream_side('L'), self._stream_side('R'), lay)
             return plan, {'L': self._srcs['L'], 'R': self._srcs['R']}
@@ -1031,6 +1208,8 @@ class SmartPrintDialog(QWidget):
             idx = list(range(cur, min(cur + (n_sel if mode == 'nup' else 1), n)))
         allinfos = src.infos()
         infos = [allinfos[i] for i in idx]
+        self._n_in = (len(infos),)
+        self._src_wh = (infos[0].width, infos[0].height) if infos else None
         sheet = self.cmb_sheet.currentText()
         if mode == 'split':
             plan = build_plan('split', infos, sheet=sheet, n=n_sel, margins=margins,
@@ -1054,7 +1233,7 @@ class SmartPrintDialog(QWidget):
             plan = build_plan('region', infos, sheet=sheet, margins=margins, fit='fit', src_id=target,
                               regions=self._trim_regions(target, [i.index for i in infos]))
         else:
-            plan = build_plan('fit', infos, sheet='A3' if mode == 'a3' else sheet, margins=margins, src_id=target)
+            plan = build_plan('fit', infos, sheet=sheet, margins=margins, src_id=target)
         return plan, {target: src}
 
     def refresh(self):
@@ -1070,6 +1249,7 @@ class SmartPrintDialog(QWidget):
             if ms is not None and ms < 0.3 and self.cmb_mode.currentData() == 'nup' and self._target() not in PAIR_TARGETS:
                 info += f' · 배율 {ms * 100:.0f}% — 글씨가 작아 읽기 어려울 수 있습니다'
             self.lbl_info.setText(info)
+            self._update_result()
             self._k = max(0, min(self._k, len(self._plan.sheets) - 1))
             self._rebuild_thumbs()
             self._show()
@@ -1079,6 +1259,7 @@ class SmartPrintDialog(QWidget):
             self._outstanding.clear()
             self.thumbs.clear(); self._thumb_queue.clear()
             self.view.clear(); self.lbl_nav.setText(''); self.lbl_render.setText(''); self.lbl_info.setText(f'오류: {e}')
+            self.lbl_result.setText('설정을 확인하세요: ' + str(e))
         ok = self._plan is not None and len(self._plan.sheets) > 0
         self.btn_print.setEnabled(ok); self.btn_save.setEnabled(ok)
 

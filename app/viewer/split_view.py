@@ -198,6 +198,9 @@ class SplitView(QWidget):
         for pane in (self.left, self.right):
             pane.file_dropped.connect(lambda path, pane=pane: self.open_in_pane(pane, path))
         QShortcut(QKeySequence('Ctrl+P'), self, activated=self.print_documents)
+        QShortcut(QKeySequence('F5'), self, activated=lambda: self.start_presentation(False))
+        QShortcut(QKeySequence('Shift+F5'), self, activated=lambda: self.start_presentation(True))
+        self._presentation = None
         self.left.open_btn.clicked.connect(lambda: self._pick(self.left))
         self.right.open_btn.clicked.connect(lambda: self._pick(self.right))
         for a, b in ((self.left, self.right), (self.right, self.left)):
@@ -212,6 +215,33 @@ class SplitView(QWidget):
     def print_documents(self):
         from app.shell.print_dialog import open_print_dialog  # lazy
         open_print_dialog(self, self.left.canvas, self.right.canvas)
+
+    def presentation_sync_state(self):
+        if not self.sync_scroll.isChecked():
+            return 'off'
+        if self._anchors_valid():
+            return 'off' if self._anchor_stale else 'anchor'
+        return 'normal'
+
+    def _presentation_open(self):
+        try:
+            return self._presentation is not None and self._presentation.isVisible()
+        except RuntimeError:     # 창이 이미 삭제됨
+            self._presentation = None
+            return False
+
+    def start_presentation(self, from_start=False):
+        """좌우 문서를 전체화면 발표모드로 연다. 작업 화면의 캔버스/기준점은 변경되지 않는다."""
+        if self._presentation_open():
+            return None
+        from app.presentation.context import context_from_split  # lazy
+        from app.presentation.window import start_presentation
+        ctx = context_from_split(self.left.canvas, self.right.canvas, self.presentation_sync_state(), from_start)
+        win = start_presentation(ctx, self.window())
+        self._presentation = win
+        if win is not None:
+            win.closed.connect(lambda: setattr(self, '_presentation', None))
+        return win
 
     def _update_print_enabled(self):
         self.btn_print.setEnabled(any(p.canvas.doc for p in (self.left, self.right)))

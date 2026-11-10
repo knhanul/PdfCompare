@@ -72,7 +72,7 @@ def relation_offset(a_sizes, a_anchor, a_pos, b_sizes, b_anchor, b_pos):
 # ── 캔버스 어댑터 (PdfCanvas 의 내부 레이아웃을 읽기만 한다) ─────────────────────────
 def capture_pos(canvas, ratio=0.5):
     """뷰포트 세로 ratio 지점의 위치(페이지+비율). 스크롤은 변경하지 않는다."""
-    from app.viewer.pdf_canvas import MARGIN, PAGE_GAP
+    MARGIN, PAGE_GAP = canvas.margin, canvas.page_gap
     if not canvas.doc or not canvas._tops:
         return 0.0
     y = canvas.verticalScrollBar().value() + MARGIN + ratio * canvas.viewport().height()
@@ -84,7 +84,7 @@ def capture_pos(canvas, ratio=0.5):
 
 def apply_pos(canvas, pos, ratio=0.5):
     """capture_pos 의 역: ratio 지점이 pos 가 되도록 세로 스크롤. 범위는 스크롤바가 제한."""
-    from app.viewer.pdf_canvas import MARGIN, PAGE_GAP
+    MARGIN, PAGE_GAP = canvas.margin, canvas.page_gap
     if not canvas.doc or not canvas._tops:
         return
     i = max(0, min(int(pos), len(canvas._tops) - 1))
