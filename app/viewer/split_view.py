@@ -134,6 +134,7 @@ class _Pane(QWidget):
 
 
 class SplitView(QWidget):
+    is_split_view = True
     open_compare = pyqtSignal(str)   # tool key
     closed = pyqtSignal()
 

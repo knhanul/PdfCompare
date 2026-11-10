@@ -260,6 +260,9 @@ class MdiMainWindow(QMainWindow):
         self.tool_container_layout.setContentsMargins(0, 0, 0, 0)
         self.mode_stack.addWidget(self.tool_container)
         right_panel_layout.addWidget(self.mode_stack, 1)
+        self._print_page = None
+        self._print_ctx = None
+        self.mode_stack.currentChanged.connect(self._on_stack_changed)
 
         return right_panel
 
@@ -811,6 +814,9 @@ class MdiMainWindow(QMainWindow):
         if self.split_view is not None and cur is self.split_view:
             self.split_view.closed.emit()
             return
+        if self._print_page is not None and cur is self._print_page:
+            self._print_page.reject()
+            return
         if not self.current_tool_widget:
             return
         if hasattr(self.current_tool_widget, 'confirm_discard_changes'):
@@ -865,8 +871,87 @@ class MdiMainWindow(QMainWindow):
         self.current_tool_widget = None
         self.set_active_sidebar_button(None)
 
+    def show_print_page(self, page):
+        """스마트 인쇄 전용 페이지로 전환. 이전 위젯(뷰어/동시보기)은 파괴하지 않고 보존한다."""
+        old = self._print_page
+        if old is not None and self.mode_stack.currentWidget() is old and self._print_ctx:
+            ctx = dict(self._print_ctx)      # 재진입: 원래 돌아갈 화면을 유지
+        else:
+            ctx = {'prev': self.mode_stack.currentWidget(), 'title': self.header_title.text(),
+                   'nav': self._active_view_key(), 'sidebar_manual': self.sidebar_manual}
+            ctx['pos'] = [(c, c.position()) for c in self._canvases_of(ctx['prev'])]
+        self._drop_print_page()
+        self._print_ctx = ctx
+        # 인쇄 중에는 사이드바를 아이콘 형태로 최소화(작업 영역 확보). 떠날 때 원래 상태로 복원한다.
+        if not self.focus_mode:
+            self.sidebar_manual = True
+            self.update_sidebar_compact()
+        page._hosted = True
+        self._print_page = page
+        self.mode_stack.addWidget(page)
+        page.closed.connect(self._leave_print_page)
+        self.mode_stack.setCurrentWidget(page)
+        self.header_title.setText('스마트 인쇄')
+
+    def _canvases_of(self, widget):
+        try:
+            if widget is self.viewer and self.viewer._cv() is not None:
+                return [self.viewer._cv().canvas]
+            if self.split_view is not None and widget is self.split_view:
+                return [self.split_view.left.canvas, self.split_view.right.canvas]
+        except Exception:
+            pass
+        return []
+
+    def _restore_positions(self, pos):
+        # 사이드바 폭 변화로 재배치되어도 스크롤 위치(배율 독립 좌표)를 그대로 되돌린다.
+        for canvas, (p, h) in pos:
+            try:
+                if canvas.doc is not None:
+                    canvas.set_position(p, h)
+            except Exception:
+                pass
+
+    def _leave_print_page(self):
+        """복귀 버튼/Esc: 저장한 이전 위젯으로 직접 되돌린다(open_split_view 재호출 없음)."""
+        ctx = getattr(self, '_print_ctx', None)
+        if self._print_page is None or ctx is None:
+            return
+        prev = ctx['prev']
+        if prev is not None and self.mode_stack.indexOf(prev) >= 0:
+            self.mode_stack.setCurrentWidget(prev)
+            self.header_title.setText(ctx['title'])
+            self._set_active_nav(ctx['nav'])
+            pos = ctx.get('pos') or []
+            self._restore_positions(pos)
+            QTimer.singleShot(0, lambda: self._restore_positions(pos))
+        elif self.viewer.count():
+            self.show_viewer()
+        else:
+            self.show_welcome()
+
+    def _drop_print_page(self):
+        page = self._print_page
+        if page is None:
+            return
+        self._print_page = None
+        page.release()
+        self.mode_stack.removeWidget(page)
+        page.deleteLater()
+        ctx = self._print_ctx or {}
+        if 'sidebar_manual' in ctx:
+            self.sidebar_manual = ctx['sidebar_manual']
+            if not self.focus_mode:
+                self.update_sidebar_compact()
+
+    def _on_stack_changed(self, _idx):
+        if self._print_page is not None and self.mode_stack.currentWidget() is not self._print_page:
+            self._drop_print_page()
+
     def _active_view_key(self):
         w = self.mode_stack.currentWidget() if hasattr(self, 'mode_stack') else None
+        if self._print_page is not None and w is self._print_page:
+            return (self._print_ctx or {}).get('nav')
         if w is self.welcome_page:
             return 'home'
         if w is self.viewer:
@@ -1186,6 +1271,12 @@ class MdiMainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """애플리케이션 종료 시 모든 스레드 정리 (좀비 프로세스 방지)"""
+        try:
+            self._drop_print_page()   # 출력 생성 스레드/원본 문서 정리 (자식 위젯엔 closeEvent가 전달되지 않음)
+            from app.shell.print_dialog import wait_orphan_workers
+            wait_orphan_workers()
+        except Exception:
+            pass
         for tool in self.tool_cache.values():
             if hasattr(tool, 'confirm_discard_changes') and not tool.confirm_discard_changes():
                 event.ignore()

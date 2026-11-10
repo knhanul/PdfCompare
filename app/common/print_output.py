@@ -52,3 +52,45 @@ def _apply_page(printer: QPrinter, rect):
     printer.setPageOrientation(QPageLayout.Orientation.Portrait if portrait
                                else QPageLayout.Orientation.Landscape)
     printer.setFullPage(True)  # 엔진이 이미 여백을 포함 → 하드웨어 여백으로 재축소/비율왜곡 방지
+
+
+# ── 프린터 정보 (인쇄 불가 영역 / 지원 용지) ──
+def available_printers():
+    """(설치된 프린터 이름 목록, 기본 프린터 이름). 조회 실패 시 ([], '')."""
+    try:
+        from PyQt6.QtPrintSupport import QPrinterInfo
+        return list(QPrinterInfo.availablePrinterNames()), QPrinterInfo.defaultPrinterName() or ''
+    except Exception:
+        return [], ''
+
+
+def min_margin_mm(name):
+    """프린터의 최소(하드웨어) 여백 mm — 네 변 중 최댓값(방향과 무관하게 보수적으로 사용). 알 수 없으면 None."""
+    try:
+        from PyQt6.QtPrintSupport import QPrinterInfo
+        info = QPrinterInfo.printerInfo(name)
+        if info.isNull():
+            return None
+        pl = QPrinter(info, QPrinter.PrinterMode.ScreenResolution).pageLayout()
+        pl.setUnits(QPageLayout.Unit.Millimeter)
+        m = pl.minimumMargins()
+        return max(m.left(), m.top(), m.right(), m.bottom())
+    except Exception:
+        return None
+
+
+_PAGE_IDS = {'A3': 'A3', 'A4': 'A4', 'A5': 'A5', 'B4': 'JisB4', 'B5': 'JisB5'}
+
+
+def supports_paper(name, sheet):
+    """프린터가 용지를 지원하면 True, 미지원 False, 판단 불가 None."""
+    try:
+        from PyQt6.QtPrintSupport import QPrinterInfo
+        info = QPrinterInfo.printerInfo(name)
+        sizes = info.supportedPageSizes() if not info.isNull() else []
+        if not sizes:
+            return None
+        want = getattr(QPageSize.PageSizeId, _PAGE_IDS[sheet])
+        return any(ps.id() == want for ps in sizes)
+    except Exception:
+        return None

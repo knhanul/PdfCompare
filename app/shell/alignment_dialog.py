@@ -191,14 +191,17 @@ class SidePanel(QFrame):
         return r.width, r.height
 
 
-class AlignmentDialog(QDialog):
-    """sides: [AlignSide, AlignSide], initial: [(page0, y_pt), (page0, y_pt)] → result_state()."""
+class AlignmentView(QWidget):
+    """시작 위치 맞춤 화면(인쇄 페이지의 탭에 삽입). 팝업이 아니다.
+    sides: [AlignSide, AlignSide], initial: [(page0, y_pt), (page0, y_pt)].
+    '정렬 적용' → applied, '취소' → cancelled 신호. 값은 result_state()로 읽는다.
+    뷰어의 스크롤/동기화 상태에는 접근하지 않는다(독립 문서 사본 사용)."""
+    applied = pyqtSignal()
+    cancelled = pyqtSignal()
 
     def __init__(self, sides, initial, parent=None):
         super().__init__(parent)
-        self.setWindowTitle('PDF 시작 위치 맞춤')
-        self.resize(1050, 750)
-        self.setMinimumSize(640, 480)
+        self.setMinimumSize(480, 360)
         self._docs = [pymupdf.open('pdf', s.data) if isinstance(s.data, (bytes, bytearray))
                       else pymupdf.open(s.data) for s in sides]
         self._initial = [tuple(i) for i in initial]
@@ -226,11 +229,11 @@ class AlignmentDialog(QDialog):
         root.addLayout(panels, 1)
         foot = QHBoxLayout()
         self.btn_reset = QPushButton('초기화')
-        self.btn_cancel = QPushButton('취소'); self.btn_ok = QPushButton('정렬 적용')
+        self.btn_cancel = QPushButton('변경 취소'); self.btn_ok = QPushButton('정렬 적용')
         self.btn_ok.setObjectName('actionBtn')
         self.btn_reset.clicked.connect(self.reset)
-        self.btn_cancel.clicked.connect(self.reject)
-        self.btn_ok.clicked.connect(self.accept)
+        self.btn_cancel.clicked.connect(self.cancelled.emit)
+        self.btn_ok.clicked.connect(self.applied.emit)
         foot.addWidget(self.btn_reset); foot.addStretch(1); foot.addWidget(self.btn_cancel); foot.addWidget(self.btn_ok)
         root.addLayout(foot)
         self._t = QTimer(self); self._t.setSingleShot(True); self._t.setInterval(80)
@@ -248,6 +251,8 @@ class AlignmentDialog(QDialog):
         return max(0.1, min(zs))
 
     def _relayout(self):
+        if not self._docs:   # release() 이후 지연 호출 방지(닫힌 문서 접근 → 슬롯 예외 → 앱 중단)
+            return
         if self._fit:
             self._zoom = self._fit_zoom()
         for p in self.panels:
@@ -280,9 +285,12 @@ class AlignmentDialog(QDialog):
     def result_state(self):
         return [(p.page(), p.y()) for p in self.panels]
 
-    def done(self, r):
+    def release(self):
         self._t.stop()
         for d in self._docs:
             d.close()
         self._docs = []
-        super().done(r)
+
+    def closeEvent(self, e):
+        self.release()
+        super().closeEvent(e)

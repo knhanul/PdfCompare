@@ -12,11 +12,12 @@ class SourceDoc:
             self._doc = pymupdf.open("pdf", bytes(path_or_bytes))
         else:
             self._doc = pymupdf.open(str(path_or_bytes))
+        self.bake_failed = False   # True면 주석/양식 필드가 출력에서 빠질 수 있다
         if bake:
             try:
                 self._doc.bake()
             except Exception:
-                pass
+                self.bake_failed = True
         self._info, self._rot, self._derot = [], [], []
         for i, pg in enumerate(self._doc):
             r = pg.rect
@@ -41,6 +42,16 @@ class SourceDoc:
         out_page.show_pdf_page(pymupdf.Rect(d.x0, d.y0, d.x1, d.y1), self._doc, p.page,
                                clip=clip_u, rotate=(-rot - p.extra_rotate) % 360,
                                keep_proportion=False)
+
+    def detect_content(self, i, **kw):
+        """보이는 좌표 기준 내용 영역(여백 자동 감지). 회전을 임시 복원해 계산한다."""
+        from .trim import detect_content_box
+        pg = self._doc[i]
+        pg.set_rotation(self._rot[i])
+        try:
+            return detect_content_box(pg, **kw)
+        finally:
+            pg.set_rotation(0)
 
     def close(self):
         self._doc.close()
