@@ -514,6 +514,3 @@ def build_shell_qss(theme_id='default'):
     if theme_id in THEMES and theme_id != 'default':
         qss += _NON_DEFAULT_CHROME_TEMPLATE.format(**tokens)
     return qss
-
-
-SHELL_QSS = build_shell_qss()  # compatibility for existing imports

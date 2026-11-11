@@ -8,8 +8,8 @@ from PyQt6.QtGui import QFont, QIcon, QKeySequence, QPixmap, QShortcut
 from PyQt6.QtWidgets import QApplication, QFileDialog, QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton, QScrollArea, QStackedWidget, QStyle, QVBoxLayout, QWidget
  
 from app.common.about_dialog import AboutDialog, get_about_info
-from app.common.resources import APP_NAME, DEVELOPER, get_about_icon_path, get_icon_path, get_logo_path
-from app.common.styles import COLOR_PRIMARY, MODERN_QSS
+from app.common.resources import APP_NAME, get_about_icon_path, get_icon_path
+from app.common.styles import MODERN_QSS
 from app.common.comparison_settings import ComparisonSettings
 from app.services import app_settings, recent_docs, workspace_session
 from app.shell.theme import build_shell_qss, theme_tokens

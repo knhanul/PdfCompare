@@ -6,7 +6,7 @@
 - 레이저 포인터 / 임시 형광펜(문서 좌표 pt 로 저장) / 클릭 확대 — 원본 PDF는 건드리지 않는다
 """
 from PyQt6.QtCore import QEasingCurve, QPointF, QRectF, Qt, QTimer, QVariantAnimation, pyqtSignal
-from PyQt6.QtGui import QColor, QCursor, QPainter, QPen
+from PyQt6.QtGui import QColor, QPainter, QPen
 from PyQt6.QtWidgets import QAbstractScrollArea
 
 from app.presentation import navigation as nav

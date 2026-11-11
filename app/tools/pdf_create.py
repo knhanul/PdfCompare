@@ -17,8 +17,8 @@ from app.common.pdf_convert import SUPPORTED_EXTS, is_supported
 from app.common.pdf_convert_worker import ConvertThreadManager
 from app.common.pdf_images import collect_images, extract_pdf_text, save_image
 from app.services import app_settings
-from app.shell.theme import build_shell_qss, header_section_qss, tool_table_qss
-from app.common.styles import COLOR_BORDER, COLOR_PRIMARY, MODERN_QSS
+from app.shell.theme import build_shell_qss, tool_table_qss
+from app.common.styles import MODERN_QSS
 from app.common.loading_dialog import note_progress, style_task_progress
 from app.common.user_prefs import load_dir, save_dir
 

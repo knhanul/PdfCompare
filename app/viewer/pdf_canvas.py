@@ -1,5 +1,5 @@
 """Continuous-scroll PDF canvas (QAbstractScrollArea, renders only visible pages)."""
-from PyQt6.QtCore import QRect, QRectF, Qt, pyqtSignal
+from PyQt6.QtCore import QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QPainter, QPen
 from PyQt6.QtWidgets import QAbstractScrollArea
 

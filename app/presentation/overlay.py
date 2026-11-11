@@ -1,6 +1,6 @@
 """발표 화면 오버레이: 하단 플로팅 도구 모음, 쪽수 표시, 안내 토스트, 검은 화면 막."""
-from PyQt6.QtCore import QPropertyAnimation, Qt, QTimer
-from PyQt6.QtWidgets import (QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QToolButton,
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QToolButton,
                              QWidget)
 
 TOOLBAR_QSS = """

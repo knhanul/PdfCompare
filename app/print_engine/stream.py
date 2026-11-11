@@ -6,9 +6,9 @@
 """
 from __future__ import annotations
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from .model import Box, Margins, Mark, PageInfo, Placement, PrintPlan, Sheet
+from .model import Box, Margins, Mark, Placement, PrintPlan, Sheet
 from .units import PT_PER_MM, mm, paper
 
 

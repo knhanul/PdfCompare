@@ -2,9 +2,9 @@ import os
 import re
 
 import pymupdf
-from PyQt6.QtCore import QEasingCurve, QPoint, QParallelAnimationGroup, QPropertyAnimation, QRect, QTimer, Qt, QMimeData
+from PyQt6.QtCore import QPoint, QRect, QTimer, Qt
 from PyQt6.QtGui import QColor, QFont, QImage, QMovie, QPainter, QPen, QPixmap, QDragEnterEvent, QDropEvent
-from PyQt6.QtWidgets import QApplication, QDialog, QFileDialog, QFrame, QGraphicsOpacityEffect, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMenu, QMessageBox, QPushButton, QScrollArea, QTextEdit, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QApplication, QDialog, QFrame, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMenu, QMessageBox, QPushButton, QScrollArea, QTextEdit, QVBoxLayout, QWidget
 
 from app.common.loading_dialog import make_overlay_progress, update_overlay_progress
 from app.common.resources import get_timer_gif_path
@@ -104,14 +104,6 @@ class SelectableLabel(QLabel):
         x = contents.x() + max(0, (contents.width() - pix.width()) // 2)
         y = contents.y() + max(0, (contents.height() - pix.height()) // 2)
         return QRect(x, y, pix.width(), pix.height())
-
-    def _clamp_to_image(self, point):
-        image_rect = self._image_rect()
-        if image_rect.isNull():
-            return point
-        x = min(max(point.x(), image_rect.left()), image_rect.right())
-        y = min(max(point.y(), image_rect.top()), image_rect.bottom())
-        return QPoint(x, y)
 
     def viewer(self):
         parent = self.parent()
@@ -1003,26 +995,6 @@ class PDFViewer(QScrollArea):
     def remove_current_highlight(self):
         self.search_helper.remove_current_highlight()
     
-    def flash_search_highlight(self, page_num, rect):
-        # Temporary highlight to show current search result
-        if page_num not in self.search_highlights:
-            self.search_highlights[page_num] = []
-        self.search_highlights[page_num].append(rect)
-        self.refresh_highlights()
-        
-        # Remove after a short delay
-        QTimer.singleShot(500, lambda: self.remove_flash_highlight(page_num, rect))
-    
-    def remove_flash_highlight(self, page_num, rect):
-        if page_num in self.search_highlights:
-            try:
-                self.search_highlights[page_num].remove(rect)
-                if not self.search_highlights[page_num]:
-                    del self.search_highlights[page_num]
-                self.refresh_highlights()
-            except ValueError:
-                pass
-
     def clear_all_data(self):
         self.cancel_selection(refresh=False)
         self.word_highlights.clear()
@@ -1831,77 +1803,6 @@ class PdfCompareWidget(ComparisonSettingsMixin, QWidget):
         layout.addWidget(close_btn)
         
         dialog.exec()
-
-    def show_legend_dialog(self):
-        dialog = QDialog(self)
-        dialog.setWindowTitle('🎨 하이라이트 범례')
-        dialog.setFixedSize(500, 300)
-        dialog.setStyleSheet(MODERN_QSS + build_shell_qss(app_settings.get('ui/theme')))
-        layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(30, 30, 30, 30)
-        
-        title = QLabel('<h2 style="color:#004b93; margin-bottom:20px;">🎨 하이라이트 범례</h2>')
-        layout.addWidget(title)
-        
-        content = QLabel(
-            f"<div style='font-size:14px; line-height:1.8;'>"
-            f"<div style='margin-bottom:15px;'>"
-            f"<span style='color:rgba(255,149,0,0.6); background:rgba(255,149,0,0.3); padding:6px 12px; border-radius:4px; margin-right:10px;'>■</span>"
-            f"<b>PDF1 (주황색)</b>: PDF 1에서 삭제되거나 변경된 내용"
-            f"</div>"
-            f"<div>"
-            f"<span style='color:rgba(0,255,127,0.6); background:rgba(0,255,127,0.3); padding:6px 12px; border-radius:4px; margin-right:10px;'>■</span>"
-            f"<b>PDF2 (연두색)</b>: PDF 2에서 추가되거나 변경된 내용"
-            f"</div>"
-            f"</div>"
-        )
-        layout.addWidget(content)
-        layout.addStretch()
-        
-        close_btn = QPushButton('닫기')
-        close_btn.setObjectName('actionBtn')
-        close_btn.setFixedHeight(38)
-        close_btn.clicked.connect(dialog.accept)
-        layout.addWidget(close_btn)
-        
-        dialog.exec()
-
-    def show_caution_dialog(self):
-        dialog = QDialog(self)
-        dialog.setWindowTitle('⚠️ 주의사항')
-        dialog.setFixedSize(550, 350)
-        dialog.setStyleSheet(MODERN_QSS + build_shell_qss(app_settings.get('ui/theme')))
-        layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(30, 30, 30, 30)
-        
-        title = QLabel('<h2 style="color:#E6A23C; margin-bottom:20px;">⚠️ 주의사항</h2>')
-        layout.addWidget(title)
-        
-        content = QLabel(
-            "<div style='font-size:14px; line-height:1.8;'>"
-            + self.comparison_caution_html() +
-            "<div style='margin-bottom:12px;'>• <b>표 추출</b>: 셀 단위 드래그를 권장함</div>"
-            "<div style='margin-bottom:12px;'>• <b>하이라이트</b>: 결과는 한쪽에만 표시될 수 있음</div>"
-            "<div>• <b>정확도</b>: 100% 완벽하지 않을 수 있음, 참고용으로 활용</div>"
-            "</div>"
-        )
-        layout.addWidget(content)
-        layout.addStretch()
-        
-        close_btn = QPushButton('닫기')
-        close_btn.setObjectName('actionBtn')
-        close_btn.setFixedHeight(38)
-        close_btn.clicked.connect(dialog.accept)
-        layout.addWidget(close_btn)
-        
-        dialog.exec()
-
-    def add_hl(self, viewer, info, color):
-        page_num = info['page']
-        if page_num not in viewer.word_highlights:
-            viewer.word_highlights[page_num] = []
-        if not any(h[0] == info['bbox'] and h[1] == color for h in viewer.word_highlights[page_num]):
-            viewer.word_highlights[page_num].append((info['bbox'], color))
 
     def show_diff_list_dialog(self):
         """비교 결과 목록을 팝업으로 표시"""

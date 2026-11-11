@@ -162,11 +162,6 @@ class LogicalField:
         return path[0] if path else ""
 
     @property
-    def leaf_name(self) -> str:
-        path = self.hierarchy_path
-        return path[-1] if path else self.field_name
-
-    @property
     def is_shared_value(self) -> bool:
         """동일 논리 필드가 여러 위치에 있는 경우 (라디오 제외)."""
         return len(self.widgets) > 1 and self.field_type != "radio"

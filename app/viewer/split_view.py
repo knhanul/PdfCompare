@@ -4,7 +4,7 @@ This is *not* a comparison tool; it only shows two documents together.
 """
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QKeySequence, QShortcut
-from PyQt6.QtWidgets import (QCheckBox, QFrame, QHBoxLayout, QLabel, QLineEdit,
+from PyQt6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QLineEdit,
                              QMessageBox, QPushButton, QSplitter, QVBoxLayout,
                              QWidget)
 

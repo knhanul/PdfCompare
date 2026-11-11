@@ -16,8 +16,8 @@ from PyQt6.QtWidgets import (
 from app.common.file_names import build_new_name, direct_name, unique_name
 from app.common.loading_dialog import note_progress, style_task_progress
 from app.services import app_settings
-from app.shell.theme import THEMES, build_shell_qss, header_section_qss, theme_tokens, tool_table_qss
-from app.common.styles import COLOR_BORDER, COLOR_PRIMARY, COLOR_TEXT_MUTED, COLOR_TEXT_PRIMARY, MODERN_QSS
+from app.shell.theme import THEMES, build_shell_qss, theme_tokens, tool_table_qss
+from app.common.styles import COLOR_PRIMARY, COLOR_TEXT_MUTED, COLOR_TEXT_PRIMARY, MODERN_QSS
 from app.common.user_prefs import load_dir, save_dir
 
 OUTPUT_KEY = "output/file_rename"

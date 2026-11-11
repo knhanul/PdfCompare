@@ -7,7 +7,7 @@ PDF 비교 작업을 수행하고 결과를 signal로 전달합니다.
 import time
 from PyQt6.QtCore import QObject, pyqtSignal, QThread
 from difflib import SequenceMatcher
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Tuple, Optional
 
 
 class PdfCompareWorker(QObject):

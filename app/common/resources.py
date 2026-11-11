@@ -68,12 +68,6 @@ def _candidate_paths(relative_path):
     return [os.path.join(runtime_base, candidate) for candidate in raw_candidates]
 
 
-def get_resource_path(relative_path):
-    for candidate in _candidate_paths(relative_path):
-        if os.path.exists(candidate):
-            return candidate
-    return _candidate_paths(relative_path)[0]
-
 
 def get_logo_path():
     build_target = SETTINGS.get('BUILD_TARGET', 'posid')

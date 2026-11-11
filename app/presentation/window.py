@@ -5,8 +5,8 @@
 추후 발표자 화면은 이 창(관객용)과 분리된 PresenterWindow 가 같은 navigation/context 를 공유하도록 확장한다.
 """
 from PyQt6.QtCore import QPoint, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QAction, QActionGroup, QCursor, QGuiApplication
-from PyQt6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QInputDialog, QMenu, QWidget)
+from PyQt6.QtGui import QActionGroup, QCursor, QGuiApplication
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QInputDialog, QMenu, QWidget
 
 from app.presentation import navigation as nav
 from app.presentation.canvas import PresentationCanvas

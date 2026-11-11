@@ -2,7 +2,7 @@ import os
 import re
 
 import pymupdf
-from PyQt6.QtCore import QRect, QRectF, QTimer, Qt
+from PyQt6.QtCore import QRect, QTimer, Qt
 from PyQt6.QtGui import QColor, QImage, QMovie, QPainter, QPen, QPixmap, QDragEnterEvent, QDropEvent
 from PyQt6.QtWidgets import (
     QApplication, QCheckBox, QDialog, QFileDialog, QFrame, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
@@ -17,14 +17,14 @@ from app.common.styles import (
 )
 from app.common.pdf_search_helper import PDFSearchHelper
 from app.common.pdf_compare_worker import CompareThreadManager
-from app.common.pdf_file_open import open_pdf_dialog, try_open_pdf, show_open_error
+from app.common.pdf_file_open import open_pdf_dialog
 from app.common.pdf_text_normalizer import collect_raw_chars, normalize_raw_chars
 from app.common.comparison_options import ComparisonOptions
 from app.common.comparison_settings import ComparisonSettingsMixin
 from app.common.sync_toggle import SyncScrollToggle  # noqa: F401 (re-export)
 from app.common.tool_toggle import ToolSwitchToggle
 from app.services import app_settings
-from app.shell.theme import THEMES, build_shell_qss, theme_tokens
+from app.shell.theme import build_shell_qss
 
 
 # ──────────────────────────────────────────────────────────
@@ -1367,13 +1367,6 @@ class HFCompareWidget(ComparisonSettingsMixin, QWidget):
                 self.movie.stop()
             # Re-enable workspace
             self.workspace.setEnabled(True)
-
-    def _add_hl(self, viewer, info, color):
-        page_num = info['page']
-        if page_num not in viewer.word_highlights:
-            viewer.word_highlights[page_num] = []
-        if not any(h[0] == info['bbox'] and h[1] == color for h in viewer.word_highlights[page_num]):
-            viewer.word_highlights[page_num].append((info['bbox'], color))
 
     # Reset methods
     def get_current_page(self, viewer):

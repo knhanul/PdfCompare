@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
 )
 
 from app.services import app_settings
-from app.shell.theme import THEMES, build_shell_qss, header_section_qss, theme_tokens, tool_table_qss
+from app.shell.theme import THEMES, build_shell_qss, theme_tokens, tool_table_qss
 from app.common.styles import (
     COLOR_BORDER, COLOR_PRIMARY, COLOR_TEXT_PRIMARY, MODERN_QSS,
 )

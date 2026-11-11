@@ -243,9 +243,6 @@ class ViewerWorkspace(QWidget):
         for b in self.mode_buttons.values():
             b.setChecked(False)
 
-    def work_mode(self):
-        return self.work_panel.mode
-
     def _request_tool(self, key):
         d = self.current_doc()
         if key in ('pdf_compare', 'pdf_hf_compare'):
@@ -457,9 +454,6 @@ class ViewerWorkspace(QWidget):
     def show_search(self):
         self.search_edit.setFocus()
         self.search_edit.selectAll()
-
-    def hide_search(self):
-        self.search_edit.clear()   # textChanged가 하이라이트·카운트를 정리
 
     def _on_search_text_changed(self, text):
         v = self._cv()

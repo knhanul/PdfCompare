@@ -2,8 +2,6 @@ from PyQt6.QtGui import QColor
 from app.common.resources import THEME_COLOR_PRIMARY
 
 COLOR_PRIMARY = THEME_COLOR_PRIMARY
-COLOR_SECONDARY = '#FF6D00'
-COLOR_SIDEBAR_BG = '#FFF4E6'
 COLOR_HEADER_BG = '#F5F2F0'
 COLOR_HEADER_TITLE = '#292D33'
 COLOR_HEADER_ACCENT = '#A44735'
@@ -22,14 +20,11 @@ HEADER_FOOTER_INSTRUCTION_HTML = (
     "<span style='color:#6E3930; font-size:11px;'>스크롤하여 문서 상단(머릿글)과 하단(바닥글)을 "
     "확인한 후 각 영역의 높이를 조정하여 비교 대상에서 제외할 수 있습니다.</span>"
 )
-COLOR_MDI_BG = '#F2F2F7'
 COLOR_WORKSPACE_DARK = '#2A1F18'  # warm dark brown for PDF viewers
 COLOR_TEXT_PRIMARY = '#1C1C1E'
 COLOR_TEXT_SECONDARY = '#3C3C43'
 COLOR_TEXT_MUTED = '#8E8E93'
 COLOR_BORDER = '#D1D1D6'
-COLOR_BORDER_LIGHT = '#E5E5EA'
-COLOR_HOVER = '#E8E8ED'
 COLOR_ACTIVE = '#D1D1D6'
 
 COLOR_P1 = QColor(255, 149, 0, 140)  # Orange for PDF1
@@ -49,11 +44,6 @@ _SIDEBAR_TEXT = '#55504D'        # deep gray for unselected menu text
 _SIDEBAR_HOVER = '#DCD5D0'       # light warm gray hover
 _SIDEBAR_ACTIVE_BG = '#A63F2B'   # deep terracotta for selected menu
 
-_IOS_GREEN = '#34C759'
-_IOS_ORANGE = '#FF9500'
-_IOS_ORANGE_HOVER = '#E68600'
-_IOS_ORANGE_PRESSED = '#CC7700'
-_IOS_RED = '#FF3B30'
 _IOS_GRAY_BG = '#F2F2F7'
 _IOS_GROUPED_BG = '#FFFFFF'
 _IOS_SEPARATOR = '#C6C6C8'

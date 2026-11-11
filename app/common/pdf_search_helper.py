@@ -2,8 +2,8 @@
 PDF Search Helper - Common search functionality for PDF viewers
 Provides unified search logic, result management, and highlighting
 """
-from PyQt6.QtCore import QTimer, QRect
-from PyQt6.QtGui import QColor, QPainter, QPen
+from PyQt6.QtCore import QRect
+from PyQt6.QtGui import QColor, QPen
 from PyQt6.QtWidgets import QLabel, QLineEdit, QPushButton
 
 

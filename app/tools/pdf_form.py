@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QUrl
-from PyQt6.QtGui import QColor, QDesktopServices, QDragEnterEvent, QDropEvent, QKeySequence, QShortcut
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor, QDragEnterEvent, QDropEvent, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -25,7 +25,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from app.common.styles import COLOR_BORDER, COLOR_PRIMARY, MODERN_QSS
+from app.common.styles import MODERN_QSS
 from app.services import app_settings
 from app.shell.theme import THEMES, build_shell_qss, theme_tokens, tool_table_qss
 from app.common.pdf_form.field_models import (
@@ -47,7 +47,7 @@ from app.common.pdf_form.form_data_io import (
     load_external_data_file,
 )
 from app.common.pdf_form.form_filler import FormFillerPanel
-from app.common.pdf_file_open import open_pdf_dialog, try_open_pdf, show_open_error
+from app.common.pdf_file_open import open_pdf_dialog
 from app.common.pdf_form.form_service import (
     FormDocumentSession,
     ensure_sample_form_pdf,

@@ -1303,14 +1303,6 @@ class SmartPrintDialog(QWidget):
             self._thumb_queue = deque(sorted(self._thumb_queue, key=lambda i: abs(i - self._k)))
 
     # ── 출력 ──
-    def _full_pdf(self):
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-        try:
-            plan, srcs = self._make_plan()
-            return build_pdf(plan, srcs)
-        finally:
-            QApplication.restoreOverrideCursor()
-
     def _start_output(self, on_built, label):
         """백그라운드로 출력 PDF 생성. 완료되면 on_built(bytes). 진행 중에는 버튼을 잠근다."""
         if self._worker is not None:
