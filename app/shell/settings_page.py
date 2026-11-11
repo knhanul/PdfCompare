@@ -1,9 +1,10 @@
 """Screen 7 — 설정 및 작업 공간 관리."""
-from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QFrame, QHBoxLayout, QLabel, QPushButton,
-                             QScrollArea, QSpinBox, QVBoxLayout, QWidget)
+from PyQt6.QtCore import QUrl, pyqtSignal
+from PyQt6.QtGui import QDesktopServices
+from PyQt6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QFrame, QHBoxLayout, QLabel, QMessageBox,
+                             QPushButton, QScrollArea, QSpinBox, QVBoxLayout, QWidget)
 
-from app.services import app_settings, recent_docs, workspace_session
+from app.services import app_settings, file_association, recent_docs, workspace_session
 from app.shell.theme import THEME_CHOICES
 
 ZOOM_CHOICES = [('width', '폭 맞춤'), ('page', '쪽 맞춤'), ('100', '100%')]
@@ -59,6 +60,25 @@ class SettingsPage(QWidget):
         f.addRow('기본 열기 방식', self.open_mode)
         self.show_nav = QCheckBox('페이지 탐색 패널 표시')
         f.addRow('탐색 패널', self.show_nav)
+        if file_association.is_supported():
+            self.assoc_info = QLabel()
+            self.assoc_register = QPushButton('PDF 연결 프로그램으로 등록')
+            self.assoc_register.setObjectName('viewerToolBtn')
+            self.assoc_register.clicked.connect(self._register_association)
+            self.assoc_remove = QPushButton('등록 해제')
+            self.assoc_remove.setObjectName('viewerToolBtn')
+            self.assoc_remove.clicked.connect(self._unregister_association)
+            row = QHBoxLayout()
+            row.addWidget(self.assoc_info)
+            row.addWidget(self.assoc_register)
+            row.addWidget(self.assoc_remove)
+            row.addStretch()
+            f.addRow('연결 프로그램', row)
+            hint = QLabel('등록하면 탐색기 「연결 프로그램」에 표시됩니다. Windows 정책상 기본 앱 지정은 '
+                          '등록 후 열리는 기본 앱 설정에서 .pdf 항목을 직접 선택해야 합니다.')
+            hint.setObjectName('mutedLabel')
+            hint.setWordWrap(True)
+            f.addRow('', hint)
 
         f = section('최근 문서 · 작업 공간')
         self.recent_info = QLabel()
@@ -132,7 +152,33 @@ class SettingsPage(QWidget):
             else:
                 w.setValue(int(v))
         self.recent_info.setText(f'{len(recent_docs.load_recent())}개 저장됨')
+        self._update_association_info()
         self._loading = False
+
+    def _update_association_info(self):
+        if not hasattr(self, 'assoc_info'):
+            return
+        registered = file_association.is_registered()
+        text = '등록됨' if registered else '등록 안 됨'
+        if not file_association.is_frozen():
+            text += ' (개발 실행)'
+        self.assoc_info.setText(text)
+        self.assoc_remove.setEnabled(registered)
+
+    def _register_association(self):
+        try:
+            file_association.register()
+        except OSError as e:
+            QMessageBox.warning(self, '연결 프로그램', f'등록하지 못했습니다.\n{e}')
+            return
+        self._update_association_info()
+        QMessageBox.information(self, '연결 프로그램',
+                                '등록했습니다. 이어서 열리는 기본 앱 설정에서 .pdf를 이 프로그램으로 선택하세요.')
+        QDesktopServices.openUrl(QUrl(file_association.default_apps_url()))
+
+    def _unregister_association(self):
+        file_association.unregister()
+        self._update_association_info()
 
     def _save(self, key, value):
         if self._loading:

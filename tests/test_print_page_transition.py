@@ -2,10 +2,13 @@
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QApplication
 
+from app.services import recent_docs, workspace_session
 from tests.test_print_engine_core import make_pdf
 
 _app = QApplication.instance() or QApplication([])
@@ -16,6 +19,14 @@ class PrintPageTransitionTest(unittest.TestCase):
     def setUpClass(cls):
         from app.main_window import MdiMainWindow
         cls.tmp = tempfile.TemporaryDirectory()
+        settings_path = os.path.join(cls.tmp.name, "settings.ini")
+        cls.settings_patches = [
+            patch.object(service, "_settings",
+                         lambda: QSettings(settings_path, QSettings.Format.IniFormat))
+            for service in (recent_docs, workspace_session)
+        ]
+        for settings_patch in cls.settings_patches:
+            settings_patch.start()
         cls.paths = []
         for n in ("a", "b"):
             p = os.path.join(cls.tmp.name, n + ".pdf")
@@ -29,6 +40,8 @@ class PrintPageTransitionTest(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.win.close()
+        for settings_patch in cls.settings_patches:
+            settings_patch.stop()
         try:
             cls.tmp.cleanup()
         except Exception:

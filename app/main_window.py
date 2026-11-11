@@ -8,7 +8,7 @@ from PyQt6.QtGui import QFont, QIcon, QKeySequence, QPixmap, QShortcut
 from PyQt6.QtWidgets import QApplication, QFileDialog, QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton, QScrollArea, QStackedWidget, QStyle, QVBoxLayout, QWidget
  
 from app.common.about_dialog import AboutDialog, get_about_info
-from app.common.resources import APP_NAME, get_about_icon_path, get_icon_path
+from app.common.resources import APP_ID, APP_NAME, get_about_icon_path, get_icon_path
 from app.common.styles import MODERN_QSS
 from app.common.comparison_settings import ComparisonSettings
 from app.services import app_settings, recent_docs, workspace_session
@@ -1155,7 +1155,7 @@ class MdiMainWindow(QMainWindow):
         for p in paths:
             self.open_pdf(p)
 
-    def open_pdf(self, path, page=0):
+    def open_pdf(self, path, page=0, record_recent=True):
         if not path:
             return False
         if not os.path.isfile(path):
@@ -1168,13 +1168,24 @@ class MdiMainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.warning(self, 'PDF 열기 실패', f'{os.path.basename(path)}\n{e}')
             return False
-        recent_docs.add_recent(doc.path)
+        if record_recent:
+            recent_docs.add_recent(doc.path)
         if app_settings.get('viewer/open_mode') == 'replace' and self.viewer.count():
             self.viewer.replace_current(doc, page)
         else:
             self.viewer.add_document(doc, page)
         self.show_viewer()
         return True
+
+    def open_external_files(self, paths):
+        """탐색기 연결/다른 실행에서 넘어온 PDF를 열고 창을 앞으로 가져온다."""
+        for p in paths:
+            self.open_pdf(p)
+        if self.isMinimized():
+            self.showNormal()
+        self.show()
+        self.raise_()
+        self.activateWindow()
 
     def _on_viewer_doc_closed(self, path):
         in_split = self.split_view is not None and path in self.split_view.paths()
@@ -1185,7 +1196,7 @@ class MdiMainWindow(QMainWindow):
 
     def restore_session(self):
         for e in workspace_session.load_session():
-            self.open_pdf(e['path'], int(e.get('page', 0)))
+            self.open_pdf(e['path'], int(e.get('page', 0)), record_recent=False)
 
     def _on_welcome_action(self, key):
         if key == 'split_view':
@@ -1335,10 +1346,6 @@ def _close_splash_screen():
         pass
 
 
-from configs.settings import SETTINGS as _SETTINGS
-SETTINGS_TARGET_ID = 'Posid' if _SETTINGS.get('BUILD_TARGET') == 'posid' else str(_SETTINGS.get('BUILD_TARGET', 'App')).capitalize()
-
-
 def _set_app_user_model_id():
     """작업표시줄이 python.exe 가 아닌 앱 고유 ID/아이콘으로 묶이도록 설정(Windows)."""
     if os.name != 'nt':
@@ -1349,15 +1356,22 @@ def _set_app_user_model_id():
         # 패키지(MSIX) 실행 중이면 OS가 부여한 AUMID를 그대로 사용 (15700 = 패키지 아님)
         if ctypes.windll.kernel32.GetCurrentPackageFullName(ctypes.byref(length), None) != 15700:
             return
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
-            f'{SETTINGS_TARGET_ID}.PdfCompare')
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
     except Exception:
         pass
 
 
-def run():
+def run(argv=None):
+    import sys
+    from app.services import single_instance
+
+    argv = sys.argv if argv is None else argv
     _set_app_user_model_id()
-    app = QApplication.instance() or QApplication([])
+    app = QApplication.instance() or QApplication(argv)
+    paths = single_instance.pdf_args(argv[1:])
+    if single_instance.send_to_running(paths):
+        _close_splash_screen()
+        return 0
     _icon = get_icon_path()
     if _icon:
         app.setWindowIcon(QIcon(_icon))
@@ -1367,6 +1381,11 @@ def run():
                        QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath)):
         app.installTranslator(translator)
     window = MdiMainWindow()
+    server = single_instance.InstanceServer(parent=window)
+    server.files_received.connect(window.open_external_files)
+    server.listen()
     window.show()
     _close_splash_screen()
+    if paths:
+        QTimer.singleShot(0, lambda: window.open_external_files(paths))
     return app.exec()

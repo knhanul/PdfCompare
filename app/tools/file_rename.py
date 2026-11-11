@@ -86,7 +86,7 @@ class FileRenameWidget(QWidget):
 
         left = QWidget()
         left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setContentsMargins(0, 0, 6, 0)
         self.file_table = QTableWidget(0, len(COLUMNS))
         self.header = CheckBoxHeader(self.file_table)
         self.file_table.setHorizontalHeader(self.header)
@@ -124,14 +124,14 @@ class FileRenameWidget(QWidget):
 
         right = QWidget()
         right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setContentsMargins(8, 0, 4, 0)
         right_layout.setSpacing(8)
 
         rules = QWidget()
         rules.setObjectName("rulePane")
         self.rules_pane = rules
         rules_layout = QVBoxLayout(rules)
-        rules_layout.setContentsMargins(2, 0, 8, 8)
+        rules_layout.setContentsMargins(6, 0, 8, 8)
         rules_layout.setSpacing(10)
         hint = QLabel("왼쪽 변경 이름이 바로 미리보기입니다. 칸을 더블클릭하면 그 파일만 직접 고칩니다.")
         hint.setObjectName("ruleHint")
@@ -256,6 +256,7 @@ class FileRenameWidget(QWidget):
         self.history_list.itemDoubleClicked.connect(self.open_history_item)
         right_layout.addWidget(self.history_list)
         splitter.addWidget(right)
+        splitter.setChildrenCollapsible(False)
         splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 2)
         root.addWidget(splitter, 1)

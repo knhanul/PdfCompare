@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QListWidget, QListWidgetItem, QMessageBox, QFrame, QSplitter, QDialog,
     QTabWidget, QLineEdit, QSpinBox, QRadioButton, QProgressBar,
     QAbstractItemView, QButtonGroup, QTableWidget, QTableWidgetItem,
-    QFileIconProvider,
+    QFileIconProvider, QScrollArea,
 )
 
 from app.services import app_settings
@@ -57,11 +57,13 @@ class PdfEditorWidget(QWidget):
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(8)
 
+        self._splitter_ready = False
         splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.splitter = splitter
 
         left = QWidget()
         left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setContentsMargins(0, 0, 6, 0)
         left_layout.setSpacing(6)
 
         self.file_table = QTableWidget(0, len(FILE_COLUMNS))
@@ -99,7 +101,10 @@ class PdfEditorWidget(QWidget):
         self.count_label = QLabel("체크 0 / 전체 0")
         self.count_label.setObjectName("toolbarLabel")
         file_btns.addWidget(self.count_label)
+        self.lbl_sel = QLabel("선택 0 / 전체 0")
+        self.lbl_sel.setObjectName("toolbarLabel")
         left_layout.addLayout(file_btns)
+        left_layout.addWidget(self.lbl_sel)
 
         viewer = QFrame()
         viewer_layout = QVBoxLayout(viewer)
@@ -127,8 +132,6 @@ class PdfEditorWidget(QWidget):
         self.lbl_zoom.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_zoom.setToolTip("배율을 입력하세요. 예: 150")
         self.lbl_zoom.editingFinished.connect(self._apply_thumb_zoom_input)
-        self.lbl_sel = QLabel("선택 0 / 전체 0")
-        self.lbl_sel.setObjectName("toolbarLabel")
         btn_all = QPushButton("전체")
         btn_all.setObjectName("toolbarBtn")
         btn_all.setFixedSize(46, 30)
@@ -155,7 +158,6 @@ class PdfEditorWidget(QWidget):
         page_head.addWidget(btn_even)
         page_head.addWidget(btn_clear)
         page_head.addStretch()
-        page_head.addWidget(self.lbl_sel)
         viewer_layout.addWidget(toolbar)
 
         self.page_list = QListWidget()
@@ -179,7 +181,7 @@ class PdfEditorWidget(QWidget):
 
         right = QWidget()
         right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setContentsMargins(8, 0, 4, 0)
 
         self.tabs = QTabWidget()
         self.tabs.addTab(self._create_split_tab(), "분할")
@@ -226,7 +228,13 @@ class PdfEditorWidget(QWidget):
         style_task_progress(self.progress)
         right_layout.addWidget(self.progress)
 
-        splitter.addWidget(right)
+        right_scroll = QScrollArea()
+        right_scroll.setWidgetResizable(True)
+        right_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        right_scroll.setWidget(right)
+        right_scroll.setMinimumWidth(380)
+        splitter.addWidget(right_scroll)
+        splitter.setChildrenCollapsible(False)
         splitter.setStretchFactor(0, 2)
         splitter.setStretchFactor(1, 1)
         root.addWidget(splitter, 1)
@@ -234,6 +242,15 @@ class PdfEditorWidget(QWidget):
         self._create_bottom_bar(root)
         self._style_file_table()
 
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self._splitter_ready:
+            self._splitter_ready = True
+            total = self.splitter.width()
+            if total > 100:
+                left_w = total - max(380, total // 3)
+                self.splitter.setSizes([left_w, total - left_w])
 
     def _create_bottom_bar(self, parent_layout):
         bar = QFrame()
@@ -309,7 +326,9 @@ class PdfEditorWidget(QWidget):
     def _create_merge_tab(self):
         w = QWidget()
         lay = QVBoxLayout(w)
-        lay.addWidget(QLabel("여러 PDF를 끌어다 놓거나 [파일 추가]로 불러오세요.\n체크한 파일이 왼쪽 목록 순서대로 병합됩니다."))
+        merge_hint = QLabel("여러 PDF를 끌어다 놓거나 [파일 추가]로 불러오세요.\n체크한 파일이 왼쪽 목록 순서대로 병합됩니다.")
+        merge_hint.setWordWrap(True)
+        lay.addWidget(merge_hint)
         btn_up = QPushButton("선택 파일 위로")
         btn_up.clicked.connect(self.move_file_up)
         btn_down = QPushButton("선택 파일 아래로")
@@ -322,7 +341,9 @@ class PdfEditorWidget(QWidget):
     def _create_page_tab(self):
         w = QWidget()
         lay = QVBoxLayout(w)
-        lay.addWidget(QLabel("페이지를 클릭해 선택한 뒤 아래 작업을 사용하세요.\n썸네일이 바로 바뀌고, 실행을 눌러야 파일로 저장됩니다."))
+        page_hint = QLabel("페이지를 클릭해 선택한 뒤 아래 작업을 사용하세요.\n썸네일이 바로 바뀌고, 실행을 눌러야 파일로 저장됩니다.")
+        page_hint.setWordWrap(True)
+        lay.addWidget(page_hint)
         actions = [
             ("텍스트 블록 보기", self._show_text_blocks),
             ("선택 페이지 추출", lambda: self._stage_page("extract")),
@@ -603,8 +624,8 @@ class PdfEditorWidget(QWidget):
                 selected = plan["src"] in self.checked
                 item = QListWidgetItem(QIcon(self._display_pixmap(plan)), self._page_label(plan, selected))
                 item.setData(Qt.ItemDataRole.UserRole, plan["src"])
-                item.setSelected(selected)
                 self.page_list.addItem(item)
+                item.setSelected(selected)
         finally:
             QApplication.restoreOverrideCursor()
             self._updating_pages = False
@@ -1228,4 +1249,3 @@ class PdfEditorWidget(QWidget):
         if blocks:
             list_w.setCurrentRow(0)
         dlg.exec()
-

@@ -9,7 +9,7 @@ from PyQt6.QtGui import QDesktopServices, QDragEnterEvent, QDropEvent
 from PyQt6.QtWidgets import (
     QAbstractItemView, QCheckBox, QFileDialog, QFileIconProvider, QFrame,
     QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem,
-    QMessageBox, QProgressBar, QPushButton, QSplitter, QTableWidget,
+    QMessageBox, QProgressBar, QPushButton, QScrollArea, QSplitter, QTableWidget,
     QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget,
 )
 
@@ -103,7 +103,7 @@ class PdfCreateWidget(QWidget):
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         left = QWidget()
         left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setContentsMargins(0, 0, 6, 0)
         left_layout.setSpacing(6)
 
         self.file_table = QTableWidget(0, len(COLUMNS))
@@ -142,19 +142,19 @@ class PdfCreateWidget(QWidget):
             buttons.addWidget(button)
         buttons.addStretch()
         self.count_label = QLabel("체크 0 / 전체 0")
-        buttons.addWidget(self.count_label)
         left_layout.addLayout(buttons)
+        left_layout.addWidget(self.count_label)
         self.splitter.addWidget(left)
 
         right = QWidget()
         right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setContentsMargins(8, 0, 4, 0)
 
         self.action_tabs = QTabWidget()
 
         convert_page = QWidget()
         convert_layout = QVBoxLayout(convert_page)
-        convert_layout.setContentsMargins(0, 8, 0, 0)
+        convert_layout.setContentsMargins(10, 8, 10, 8)
         convert_hint = QLabel("일반 문서와 이미지를 PDF로 만듭니다. 병합을 체크하면 기존 PDF도 함께 한 파일로 합칩니다.")
         convert_hint.setWordWrap(True)
         convert_layout.addWidget(convert_hint)
@@ -185,7 +185,7 @@ class PdfCreateWidget(QWidget):
 
         extract_page = QWidget()
         extract_layout = QVBoxLayout(extract_page)
-        extract_layout.setContentsMargins(0, 8, 0, 0)
+        extract_layout.setContentsMargins(10, 8, 10, 8)
         extract_hint = QLabel("체크한 PDF에서만 동작합니다. 이미지와 글자를 결과 폴더에 저장합니다.")
         extract_hint.setWordWrap(True)
         extract_layout.addWidget(extract_hint)
@@ -237,7 +237,13 @@ class PdfCreateWidget(QWidget):
         self.history_list.setMinimumHeight(160)
         self.history_list.itemDoubleClicked.connect(self.open_history_item)
         right_layout.addWidget(self.history_list, 1)
-        self.splitter.addWidget(right)
+        right_scroll = QScrollArea()
+        right_scroll.setWidgetResizable(True)
+        right_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        right_scroll.setWidget(right)
+        right_scroll.setMinimumWidth(360)
+        self.splitter.addWidget(right_scroll)
+        self.splitter.setChildrenCollapsible(False)
         self.splitter.setStretchFactor(0, 12)
         self.splitter.setStretchFactor(1, 13)
         root.addWidget(self.splitter, 1)
